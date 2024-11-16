@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/HowXu/gosql/debug"
+	"github.com/HowXu/gosql/err"
 )
 
 //全局LogFile指针
@@ -32,11 +33,19 @@ func STD_SM_Log(info string){
 	}
 }
 
+func STDERR(info string,extra_info string) {
+	fmt.Printf("[ERROR]%d:%d:%d %s attach %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info,extra_info)
+}
+
+func STD_SM_ERR(info string){
+	fmt.Printf("[ERROR]%d:%d:%d %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info)
+}
+
 func FileLog(info string,extra_info string) {
 	//创建log相关文件在core.Init进行
 
 	//文件IO Log随时可用
-	var _,err = writer.WriteString(fmt.Sprintf("[INFO]%d:%d:%d %s attach %s",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info,extra_info))
+	var _,err = writer.WriteString(fmt.Sprintf("[INFO]%d:%d:%d %s attach %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info,extra_info))
 	if err != nil {
 		STD_SM_Log("FileLog 文件IO 出错")
 	}
@@ -46,10 +55,40 @@ func FileLog(info string,extra_info string) {
 
 func File_SM_Log(info string) {
 	//文件IO Log随时可用
-	var _,err = writer.WriteString(fmt.Sprintf("[INFO]%d:%d:%d %s",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info))
+	var _,err = writer.WriteString(fmt.Sprintf("[INFO]%d:%d:%d %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info))
 	if err != nil {
 		STD_SM_Log("FileLog 文件IO 出错")
 	}
 	//刷新缓冲区
 	writer.Flush()
+}
+
+func FileErr(info string,extra_info string) {
+	//创建log相关文件在core.Init进行
+
+	//文件IO Log随时可用
+	var _,err = writer.WriteString(fmt.Sprintf("[Error]%d:%d:%d %s attach %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info,extra_info))
+	if err != nil {
+		STD_SM_Log("FileLog 文件IO 出错")
+	}
+	//刷新缓冲区
+	writer.Flush()
+}
+
+func File_SM_Err(info string) {
+	//文件IO Log随时可用
+	var _,err = writer.WriteString(fmt.Sprintf("[Error]%d:%d:%d %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info))
+	if err != nil {
+		STD_SM_Log("FileLog 文件IO 出错")
+	}
+	//刷新缓冲区
+	writer.Flush()
+}
+
+func ALL_ERR(info string) error{
+	STD_SM_ERR(info)
+	File_SM_Err(info)
+	return &err.DatabaseError{
+        Msg: info,
+    }
 }

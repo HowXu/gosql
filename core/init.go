@@ -20,7 +20,8 @@ func Init() {
 	
 	//最基本的user表,权限表
 	Create_Folder("./db/infomation_schema")
-	Create_File("./db/infomation_schema/user.table")
-	Create_File("./db/infomation_schema/permission.table")
+	Create_File_only("./db/infomation_schema/user.table")
+	Create_File_only("./db/infomation_schema/permission.table")
 	//TODO 操作数据表的函数
+	Paser_low("infomation_schema","user")
 }

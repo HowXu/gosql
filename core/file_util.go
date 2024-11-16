@@ -21,11 +21,19 @@ func Create_Folder(path string) error {
 }
 
 func Create_File(path string) (*os.File,error){
-	var file,err = os.Create(path)
-	var _,exsit = os.Stat(path)
-	if exsit == nil {
-		return file,nil
+	var file,err = os.OpenFile(path,os.O_CREATE | os.O_APPEND | os.O_WRONLY,0666)
+
+	if err != nil {
+		log.STDLOG("文件创建失败",path)
+		return file,err
 	}
+
+	return file,nil
+}
+
+func Create_File_only(path string) (*os.File,error){
+	var file,err = os.OpenFile(path,os.O_CREATE,0666)
+
 	if err != nil {
 		log.STDLOG("文件创建失败",path)
 		return file,err
