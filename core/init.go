@@ -41,7 +41,14 @@ func Init() {
 	ins["username"] = "神"
 	ins["password"] = "god"
 	//Insert("infomation_schema","user",ins)
+
 	//TODO Update函数
+	var condition = make(map[string]any)
+	condition["username"] = "kali"
+	var data_update = make(map[string]any)
+	data_update["password"] = "rrc"
+	Update("infomation_schema","user",condition,data_update)
+
 	//读取User信息
 	data,_,err := Paser_low("infomation_schema","user")
 	if err == nil {
