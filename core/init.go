@@ -2,11 +2,16 @@ package core
 
 import (
 	"fmt"
-	"github.com/HowXu/gosql/log"
 	"time"
+
+	"github.com/HowXu/bptree"
+	"github.com/HowXu/gosql/log"
 )
 
 func Init() {
+	//debug.DEBUG = 0
+	bptree.GLOBAL_DEBUG = false
+	//debug.LogLevel = 0
 	//log目录
 	Create_Folder("./log")
 	//log file
@@ -22,6 +27,10 @@ func Init() {
 	Create_Folder("./db/infomation_schema")
 	Create_File_only("./db/infomation_schema/user.table")
 	Create_File_only("./db/infomation_schema/permission.table")
-	//TODO 操作数据表的函数
-	Paser_low("infomation_schema","user")
+	//TODO Insert函数
+	data,_,err := Paser_low("infomation_schema","user")
+	if err == nil {
+		var record,_ =data["username"].Find(2,true)
+		log.STD_SM_Log(string(record.Value))
+	}
 }
