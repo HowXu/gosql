@@ -92,3 +92,11 @@ func ALL_ERR(info string) error{
         Msg: info,
     }
 }
+
+func ALL_LOG(info string) error{
+	STD_SM_Log(info)
+	File_SM_Log(info)
+	return &err.DatabaseError{
+        Msg: info,
+    }
+}
