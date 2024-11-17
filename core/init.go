@@ -46,7 +46,7 @@ func Init() {
 	var condition = make(map[string]any)
 	condition["username"] = "kali"
 	var data_update = make(map[string]any)
-	data_update["password"] = "rrc"
+	data_update["password"] = "success"
 	Update("infomation_schema","user",condition,data_update)
 
 	//读取User信息

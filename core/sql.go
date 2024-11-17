@@ -394,6 +394,7 @@ func Update(database string, table string, condition map[string]any, data map[st
 	}
 	defer file.Close()
 	//上层的Reader直接在第三行开始了
+	//用缓冲区我只能说性能更下一层楼
 	var writer = bufio.NewWriter(file)
 	//先把头和数据类型读进去
 	writer.WriteString(strings.Join(keys_parsed, "|") + "\n")
@@ -459,6 +460,9 @@ func Update(database string, table string, condition map[string]any, data map[st
 			if line_index == index {
 				//对应行 则写入不同数据
 				writer.WriteString(strings.Join(result, "|") + "\n")
+				//补上空读一行
+				reader.ReadLine()
+				line_index++
 				break
 			} else {
 				//非对应行 写入原始数据
@@ -473,8 +477,6 @@ func Update(database string, table string, condition map[string]any, data map[st
 	}
 	//别忘了剩下部分的数据
 	for {
-		//空读上一次陷入的 line_index == index 部分
-		reader.ReadLine()
 		var out_read, _, err_rd_line = reader.ReadLine()
 		if err_rd_line == io.EOF {
 			break
