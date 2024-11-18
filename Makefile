@@ -1,4 +1,5 @@
 .PHONY: all build run
+.DEFAULT_GOAL := run
 
 all: build run
 
@@ -9,4 +10,4 @@ build:
 run: build
 	if not exist run mkdir run
 	copy .\build\gosql.exe .\run
-	cd .\run &&.\gosql.exe
+	cd .\run &&.\gosql.exe $(ARGS)

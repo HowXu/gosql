@@ -65,8 +65,6 @@ func File_SM_Log(info string) {
 
 func FileErr(info string,extra_info string) {
 	//创建log相关文件在core.Init进行
-
-	//文件IO Log随时可用
 	var _,err = writer.WriteString(fmt.Sprintf("[Error]%d:%d:%d %s attach %s\n",time.Now().Hour(),time.Now().Minute(),time.Now().Second(),info,extra_info))
 	if err != nil {
 		STD_SM_Log("FileLog 文件IO 出错")

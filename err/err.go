@@ -1,9 +1,21 @@
 package err
 
-type DatabaseError struct{
+import (
+	"strconv"
+)
+
+type DatabaseError struct {
 	Msg string
 }
 
-func (e *DatabaseError) Error() string{
+func (e *DatabaseError) Error() string {
 	return e.Msg
+}
+
+type CommandError struct {
+	Trap bool
+}
+
+func (e *CommandError) Error() string {
+	return "trap to user command line: " + strconv.FormatBool(e.Trap)
 }

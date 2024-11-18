@@ -11,6 +11,7 @@ import (
 
 	"github.com/HowXu/bptree"
 	"github.com/HowXu/gosql/log"
+	"github.com/HowXu/gosql/util"
 )
 
 // 解析数据库文件内容
@@ -295,7 +296,7 @@ func match(database string, table string, condition map[string]any, usage string
 								should_keep = false
 							}
 						} else {
-							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when update. Maybe a type error?", usage)
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when match. Maybe a type error?", usage)
 						}
 					}
 				}
@@ -605,7 +606,7 @@ func Delete(database string, table string, condition map[string]any) error {
 func Select(database string, table string, need []string, condition map[string]any) ([][]string, error) {
 	var result [][]string
 	//插入前匹配
-	var table_path, end_target, _, _, tree, err = match(database, table, condition, "update")
+	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select")
 
 	if err != nil {
 		return result, err
@@ -614,7 +615,7 @@ func Select(database string, table string, need []string, condition map[string]a
 	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
 
 	if err_p != nil {
-		return result, log.ALL_ERR("Can't open table file when update")
+		return result, log.ALL_ERR("Can't open table file when select")
 	}
 
 	//读完并且构造字符串后关掉文件 防止中途return
@@ -651,7 +652,7 @@ func Select(database string, table string, need []string, condition map[string]a
 
 // 新建数据库
 func Create_Database(database string) error {
-	return Create_Folder(fmt.Sprintf("./db/%s", database))
+	return util.Create_Folder(fmt.Sprintf("./db/%s", database))
 }
 
 // 新建表
@@ -662,13 +663,13 @@ func Create_Table(database string, table string, head map[string]string) error {
 		return log.ALL_ERR("Empty table head")
 	}
 
-	Create_File_only(table_path)
+	util.Create_File_only(table_path)
 	//写入表头
 
 	//防止覆写
 	var info, _ = os.Stat(table_path)
 	if info.Size() != 0 {
-		return log.ALL_ERR("Not an empty table when create")
+		return log.ALL_LOG("Not an empty table when create")
 	}
 
 	var file, err = os.OpenFile(table_path, os.O_APPEND|os.O_WRONLY, 0644)
