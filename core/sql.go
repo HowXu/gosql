@@ -14,7 +14,7 @@ import (
 )
 
 // 解析数据库文件内容
-func Paser_low(database string, table string) (map[string]*bptree.Tree, []string, error) {
+func paser_low(database string, table string) (map[string]*bptree.Tree, []string, error) {
 	var trees = make(map[string]*bptree.Tree)
 	//data_parsed保留返回
 	var data_parsed []string
@@ -95,6 +95,219 @@ func Paser_low(database string, table string) (map[string]*bptree.Tree, []string
 	}
 	//最后获得了完整的b+tree数组,返回
 	return trees, data_parsed, nil
+}
+
+// 模式匹配的封装
+func match(database string, table string, condition map[string]any, usage string) (string, []int, []string, []string, map[string]*bptree.Tree, error) {
+	//先判断表是否存在
+	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
+	var end_target []int
+	var keys_parsed []string
+	var types_parsed []string
+	var tree map[string]*bptree.Tree
+
+	var _, stat = os.Stat(table_path)
+	if stat != nil {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("match data to an unexist table", usage)
+	}
+
+	//表存在,现在读取第二行
+	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
+
+	if err_p != nil {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Can't open table file when match", usage)
+	}
+
+	//读完并且构造字符串后关掉文件 防止中途return
+	defer table_file.Close()
+
+	var reader = bufio.NewReader(table_file)
+	//空读取第一行
+	var keys, _, err_key = reader.ReadLine()
+	if err_key != nil {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Read data type failed", usage)
+	}
+	keys_parsed = strings.Split(string(keys), "|")
+	//读取第二行获取数据类型
+	//这里支持的有string int float boolean string[]
+	var types, _, err_rd = reader.ReadLine()
+	if err_rd != nil {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Read data type failed", usage)
+	}
+	types_parsed = strings.Split(string(types), "|")
+
+	//现在根据数据类型进行匹配
+	//解析数据库文件
+	tree, _, err := paser_low(database, table)
+	if err != nil {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Parse failed when match data", usage)
+	}
+
+	var target []int
+	//这个方法防止target有重复元素
+	addElement := func(v int) {
+		for _, existing := range target {
+			if existing == v {
+				return // 元素已存在，不添加
+			}
+		}
+		target = append(target, v) // 添加新元素
+	}
+
+	for c_key, c_value := range condition {
+		//全页匹配数据库文件
+		var key_index int
+		//获取c_key的横向索引值
+		for idx, ky := range keys_parsed {
+			if ky == c_key {
+				key_index = idx
+				break
+			} else {
+				return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("No such key in table. unable to get condition", usage)
+			}
+
+		}
+		//类型匹配
+		for i := 0; ; i++ {
+			record, _ := tree[c_key].Find(i, true)
+			if record == nil {
+				break
+			}
+			switch types_parsed[key_index] {
+			case "string", "string[]":
+				{
+					if v, ok := c_value.(string); ok {
+						if string(record.Value) == v {
+							//对上一个了,先存起来,到for循环外面进行进一步匹配
+							addElement(i)
+						}
+					}
+
+				}
+			case "int":
+				{
+					if v, ok := c_value.(int); ok {
+						//转换record
+						var int_v, err = strconv.Atoi(string(record.Value))
+						if err == nil {
+							if int_v == v {
+								addElement(i)
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
+						}
+					}
+				}
+			case "float":
+				{
+					if v, ok := c_value.(float64); ok {
+						//转换record
+						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
+						if err == nil {
+							if float_v == v {
+								addElement(i)
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
+						}
+					}
+				}
+			case "boolean":
+				{
+					if v, ok := c_value.(bool); ok {
+						//转换record
+						var boolean_v, err = strconv.ParseBool(string(record.Value))
+						if err == nil {
+							if boolean_v == v {
+								addElement(i)
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when match. Maybe a type error?", usage)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	//进一步匹配target
+	for _, index := range target {
+
+		var should_keep bool = true
+
+		for c_key, c_value := range condition {
+			var key_index int
+			//获取c_key的横向索引值
+			for idx, ky := range keys_parsed {
+				if ky == c_key {
+					key_index = idx
+					break
+				}
+				return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("No such key in table. unable to get condition", usage)
+			}
+			//找到对应c_key的其他键值
+			record, _ := tree[c_key].Find(index, true)
+			switch types_parsed[key_index] {
+			case "string", "string[]":
+				{
+					if v, ok := c_value.(string); ok {
+						if string(record.Value) != v {
+							should_keep = false
+						}
+					}
+
+				}
+			case "int":
+				{
+					if v, ok := c_value.(int); ok {
+						//转换record
+						var int_v, err = strconv.Atoi(string(record.Value))
+						if err == nil {
+							if int_v != v {
+								should_keep = false
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
+						}
+					}
+				}
+			case "float":
+				{
+					if v, ok := c_value.(float64); ok {
+						//转换record
+						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
+						if err == nil {
+							if float_v != v {
+								should_keep = false
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
+						}
+					}
+				}
+			case "boolean":
+				{
+					if v, ok := c_value.(bool); ok {
+						//转换record
+						var boolean_v, err = strconv.ParseBool(string(record.Value))
+						if err == nil {
+							if boolean_v != v {
+								should_keep = false
+							}
+						} else {
+							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when update. Maybe a type error?", usage)
+						}
+					}
+				}
+			}
+		}
+		//如果所有匹配模式符合,加入到最终匹配集
+		if should_keep {
+			end_target = append(end_target, index)
+		}
+	}
+	//匹配完全,返回需要的数据
+	return table_path, end_target, keys_parsed, types_parsed, tree, nil
 }
 
 // 插入数据
@@ -182,209 +395,26 @@ func Insert(database string, table string, data map[string]any) error {
 
 // 更新数据
 func Update(database string, table string, condition map[string]any, data map[string]any) error {
-	//插入前先判断表是否存在
-	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
-	var _, stat = os.Stat(table_path)
-	if stat != nil {
-		return log.ALL_ERR("Update data to an unexist table")
+	//插入前匹配
+	var table_path, end_target, keys_parsed, types_parsed, tree, err = match(database, table, condition, "update")
+
+	if err != nil {
+		return err
 	}
 
-	//表存在,现在读取第二行
 	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
 
 	if err_p != nil {
-		return log.ALL_ERR("Can't open table file when insert")
+		return log.ALL_ERR("Can't open table file when update")
 	}
 
 	//读完并且构造字符串后关掉文件 防止中途return
 	defer table_file.Close()
 
 	var reader = bufio.NewReader(table_file)
-	//空读取第一行
-	var keys, _, err_key = reader.ReadLine()
-	if err_key != nil {
-		return log.ALL_ERR("Read data type failed")
-	}
-	var keys_parsed = strings.Split(string(keys), "|")
-	//读取第二行获取数据类型
-	//这里支持的有string int float boolean string[]
-	var types, _, err_rd = reader.ReadLine()
-	if err_rd != nil {
-		return log.ALL_ERR("Read data type failed")
-	}
-	var types_parsed = strings.Split(string(types), "|")
-
-	//现在根据数据类型进行匹配
-	//解析数据库文件
-	var tree, _, err = Paser_low(database, table)
-	if err != nil {
-		return log.ALL_ERR("Parse failed when update data")
-	}
-
-	var target []int
-	//这个方法防止target有重复元素
-	addElement := func(v int) {
-		for _, existing := range target {
-			if existing == v {
-				return // 元素已存在，不添加
-			}
-		}
-		target = append(target, v) // 添加新元素
-	}
-
-	for c_key, c_value := range condition {
-		//全页匹配数据库文件
-		var key_index int
-		//获取c_key的横向索引值
-		for idx, ky := range keys_parsed {
-			if ky == c_key {
-				key_index = idx
-				break
-			} else {
-				return log.ALL_LOG("No such key in table. unable to get condition")
-			}
-
-		}
-		//类型匹配
-		for i := 0; ; i++ {
-			record, _ := tree[c_key].Find(i, true)
-			if record == nil {
-				break
-			}
-			switch types_parsed[key_index] {
-			case "string", "string[]":
-				{
-					if v, ok := c_value.(string); ok {
-						if string(record.Value) == v {
-							//对上一个了,先存起来,到for循环外面进行进一步匹配
-							addElement(i)
-						}
-					}
-
-				}
-			case "int":
-				{
-					if v, ok := c_value.(int); ok {
-						//转换record
-						var int_v, err = strconv.Atoi(string(record.Value))
-						if err == nil {
-							if int_v == v {
-								addElement(i)
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to int when update. Maybe a type error?")
-						}
-					}
-				}
-			case "float":
-				{
-					if v, ok := c_value.(float64); ok {
-						//转换record
-						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
-						if err == nil {
-							if float_v == v {
-								addElement(i)
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to float when update. Maybe a type error?")
-						}
-					}
-				}
-			case "boolean":
-				{
-					if v, ok := c_value.(bool); ok {
-						//转换record
-						var boolean_v, err = strconv.ParseBool(string(record.Value))
-						if err == nil {
-							if boolean_v == v {
-								addElement(i)
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to boolean when update. Maybe a type error?")
-						}
-					}
-				}
-			}
-		}
-	}
-
-	var end_target []int
-	//进一步匹配target
-	for _, index := range target {
-
-		var should_keep bool = true
-
-		for c_key, c_value := range condition {
-			var key_index int
-			//获取c_key的横向索引值
-			for idx, ky := range keys_parsed {
-				if ky == c_key {
-					key_index = idx
-					break
-				}
-				return log.ALL_LOG("No such key in table. unable to get condition")
-			}
-			//找到对应c_key的其他键值
-			record, _ := tree[c_key].Find(index, true)
-			switch types_parsed[key_index] {
-			case "string", "string[]":
-				{
-					if v, ok := c_value.(string); ok {
-						if string(record.Value) != v {
-							should_keep = false
-						}
-					}
-
-				}
-			case "int":
-				{
-					if v, ok := c_value.(int); ok {
-						//转换record
-						var int_v, err = strconv.Atoi(string(record.Value))
-						if err == nil {
-							if int_v != v {
-								should_keep = false
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to int when update. Maybe a type error?")
-						}
-					}
-				}
-			case "float":
-				{
-					if v, ok := c_value.(float64); ok {
-						//转换record
-						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
-						if err == nil {
-							if float_v != v {
-								should_keep = false
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to float when update. Maybe a type error?")
-						}
-					}
-				}
-			case "boolean":
-				{
-					if v, ok := c_value.(bool); ok {
-						//转换record
-						var boolean_v, err = strconv.ParseBool(string(record.Value))
-						if err == nil {
-							if boolean_v != v {
-								should_keep = false
-							}
-						} else {
-							return log.ALL_ERR("convert element from record to boolean when update. Maybe a type error?")
-						}
-					}
-				}
-			}
-		}
-		//如果所有匹配模式符合,加入到最终匹配集
-		if should_keep {
-			end_target = append(end_target, index)
-		}
-	}
+	//跳过前两行
+	reader.ReadLine()
+	reader.ReadLine()
 
 	//通过最终匹配集合,构造新的字符串
 	//TODO 效率太低了吧每次更新数据都要重新读写文件
@@ -492,10 +522,139 @@ func Update(database string, table string, condition map[string]any, data map[st
 	return writer.Flush()
 }
 
+// 删除数据
+func Delete(database string, table string, condition map[string]any) error {
+	//删除前先判断表是否存在
+	//插入前匹配
+	var table_path, end_target, keys_parsed, types_parsed, _, err = match(database, table, condition, "delete")
+
+	if err != nil {
+		return err
+	}
+
+	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
+
+	if err_p != nil {
+		return log.ALL_ERR("Can't open table file when update")
+	}
+
+	//读完并且构造字符串后关掉文件 防止中途return
+	defer table_file.Close()
+
+	var reader = bufio.NewReader(table_file)
+	//跳过前两行
+	reader.ReadLine()
+	reader.ReadLine()
+
+	//通过最终匹配集合,构造新的字符串
+	//TODO 效率太低了吧每次更新数据都要重新读写文件
+	var file, err_file = os.OpenFile(table_path, os.O_WRONLY, 0644)
+	if err_file != nil {
+		return log.ALL_ERR("Can't open table file when delete")
+	}
+	defer file.Close()
+	//上层的Reader直接在第三行开始了
+	//用缓冲区我只能说性能更下一层楼
+	var writer = bufio.NewWriter(file)
+	//先把头和数据类型读进去
+	writer.WriteString(strings.Join(keys_parsed, "|") + "\n")
+	writer.WriteString(strings.Join(types_parsed, "|") + "\n")
+
+	var line_index int = 0
+	for _, index := range end_target {
+		//接下来把字符串替换进去 这里的index从第三行开始计数为0
+		for {
+			//推进ReadLine函数
+			if line_index == index {
+				//对应行 写入空
+				//writer.WriteString(strings.Join(result, "|") + "\n")
+				//补上空读一行
+				reader.ReadLine()
+				line_index++
+				break
+			} else {
+				//非对应行 写入原始数据
+				var out_read, _, err_rd_line = reader.ReadLine()
+				if err_rd_line != nil {
+					return log.ALL_ERR("Read other lins failed when delete")
+				}
+				writer.WriteString(string(out_read) + "\n")
+			}
+			line_index++
+		}
+	}
+	//别忘了剩下部分的数据
+	for {
+		var out_read, _, err_rd_line = reader.ReadLine()
+		if err_rd_line == io.EOF {
+			break
+		}
+		writer.WriteString(string(out_read) + "\n")
+	}
+	// 清空文件内容
+	var err_clear = os.Truncate(table_path, 0)
+	if err_clear != nil {
+		return log.ALL_ERR("Can't clear table file when delete")
+	}
+	//输出
+	return writer.Flush()
+
+}
+
+// 查询数据 返回{{"kali","howxu"},{"range","frank"}}
+func Select(database string, table string, need []string, condition map[string]any) ([][]string, error) {
+	var result [][]string
+	//插入前匹配
+	var table_path, end_target, _, _, tree, err = match(database, table, condition, "update")
+
+	if err != nil {
+		return result, err
+	}
+
+	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
+
+	if err_p != nil {
+		return result, log.ALL_ERR("Can't open table file when update")
+	}
+
+	//读完并且构造字符串后关掉文件 防止中途return
+	defer table_file.Close()
+
+	var reader = bufio.NewReader(table_file)
+	//空读两行
+	reader.ReadLine()
+	reader.ReadLine()
+	//遍历end_target
+	for _, index := range end_target {
+		//根据需要的字符串拿东西
+		//创建一整行
+		var in []string
+
+		for _, needed := range need {
+			//拿tree里的东西 每一行都有一个完整的
+
+			var te, ex = tree[needed]
+			if !ex {
+				return result, log.ALL_ERR("Wrong key access. No this need")
+			}
+			var record, _ = te.Find(index, true)
+			if record == nil {
+				return result, log.ALL_LOG("Can't call find to get a record")
+			}
+			in = append(in, string(record.Value))
+		}
+		result = append(result, in)
+	}
+
+	return result, nil
+}
+
+// 新建数据库
 func Create_Database(database string) error {
 	return Create_Folder(fmt.Sprintf("./db/%s", database))
 }
 
+// 新建表
 func Create_Table(database string, table string, head map[string]string) error {
 	//传入应该有表头
 	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)

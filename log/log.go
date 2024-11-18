@@ -100,3 +100,11 @@ func ALL_LOG(info string) error{
         Msg: info,
     }
 }
+
+func ALL_ATA_ERR(info string,extra string) error{
+	STDERR(info,extra)
+	FileErr(info,extra)
+	return &err.DatabaseError{
+        Msg: info + "extra with "+ extra,
+    }
+}
