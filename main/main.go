@@ -5,15 +5,19 @@ import (
 
 	"github.com/HowXu/gosql/com"
 	"github.com/HowXu/gosql/core"
+	"github.com/HowXu/gosql/syntax"
 )
 
 func main() {
 	core.Init()
 	//解析命令行参数并执行 
-	how := com.Command(os.Args)
+	u,how := com.Command(os.Args)
 	//如果不是 Trap进入用户命令行
-	if how != nil {
+	if how == nil {
 		//进入用户输入行模式
-		com.OnUser()
+		var user = new(syntax.Database_user)
+		user.Database = ""
+		user.User = u
+		syntax.OnUser(user)
 	}
 }

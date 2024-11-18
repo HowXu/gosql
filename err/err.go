@@ -19,3 +19,11 @@ type CommandError struct {
 func (e *CommandError) Error() string {
 	return "trap to user command line: " + strconv.FormatBool(e.Trap)
 }
+
+type SyntaxError struct {
+	Msg string
+}
+
+func (e *SyntaxError) Error() string {
+	return "syntax error: " + e.Msg
+}
