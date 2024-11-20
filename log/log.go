@@ -114,3 +114,8 @@ func Runtime_Log(info string) {
 func Runtime_Warn(info string) {
 	fmt.Printf("WARNING: %s\n\n",info)
 }
+
+func Runtime_log_err(e error) error{
+	fmt.Printf("INFO: %s\n\n",e.Error())
+	return e
+}

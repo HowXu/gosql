@@ -39,7 +39,7 @@ func login(user string, password string) (string, error) {
 		return user, nil
 	}
 
-	log.Runtime_Log("Wrong password!")
+	fmt.Printf("\nWrong password!\n")
 
 	return user, &err.CommandError{
 		Trap: false,

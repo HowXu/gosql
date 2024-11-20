@@ -57,7 +57,7 @@ func Init() {
 	r_c["username"] = "root"
 	Get_Access("information_schema", "user")
 	Lock("information_schema", "user")
-	root, root_user_err := Select("information_schema", "user", []string{"username"}, r_c)
+	root, root_user_err := Select("information_schema", "user", []string{"username"}, r_c,false)
 	UnLock("information_schema", "user")
 	if root_user_err == nil {
 		if len(root) == 0 {
@@ -76,7 +76,7 @@ func Init() {
 	p_c["user"] = "root"
 	Get_Access("information_schema", "permission")
 	Lock("information_schema", "permission")
-	per, root_per_err := Select("information_schema", "permission", []string{"user"}, p_c)
+	per, root_per_err := Select("information_schema", "permission", []string{"user"}, p_c,false)
 	UnLock("information_schema", "permission")
 	if root_per_err == nil {
 		if len(per) == 0 {

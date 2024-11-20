@@ -1,14 +1,13 @@
 package syntax
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/HowXu/gosql/core"
 	"github.com/HowXu/gosql/err"
 	"github.com/HowXu/gosql/log"
+	"github.com/chzyer/readline"
 )
 
 type Database_user struct {
@@ -18,25 +17,27 @@ type Database_user struct {
 
 func OnUser(user *Database_user) error {
 	//语法解析和处理
-	// 创建一个新的bufio.Reader对象，它包装了os.Stdin
-	terminal_reader := bufio.NewReader(os.Stdin)
-
 	//打印gosql的提示符
 	fmt.Printf("\n\nGosql version %s\n", core.Version)
 	for {
 		//命令提示行
 		fmt.Print("gosql>")
 		//重复输入
-		read_command, err := terminal_reader.ReadString('\n')
+		//read_command, err := terminal_reader.ReadString('\n')
+		rl, err := readline.New("gosql>")
 		if err != nil {
-			fmt.Println("Error reading input:", err)
+			panic(err)
+		}
+		defer rl.Close()
+
+		line, err := rl.Readline()
+		if err != nil {
 			return log.ALL_ERR("Can't read from terminal")
 		}
-
 		// 去除读取到的字符串末尾的换行符
-		read_command = read_command[:len(read_command)-1]
+		//line = line[:len(line)-1]
 		//传递给语法解析
-		exit := onSyntaxInput(user, read_command)
+		exit := onSyntaxInput(user, line)
 		if exit == nil {
 			break
 		}
@@ -48,32 +49,73 @@ func onSyntaxInput(user *Database_user, command string) error {
 	//解析语法
 	//首先判断长度
 	if len(command) == 0 {
-		return &err.SyntaxError{
+		return log.Runtime_log_err(&err.SyntaxError{
 			Msg: "Empty command",
-		}
+		})
 	}
 
 	//按照空格分组
 	var commands []string = strings.Split(command, " ")
 	if len(commands) == 1 {
 		//只有单个命令
-		//为什么这里有"\0"
-		var no_0 string = commands[0][:len(commands[0])-1]
-		switch no_0 {
+		switch commands[0] {
 		case "exit":
 			{
-				fmt.Printf("bye bye ~\n")
+				fmt.Printf("\nbye bye ~\n")
 				return nil
 			}
 		case "whoami":
 			{
-				fmt.Printf("%s\n",user.User)
+				fmt.Printf("%s\n", user.User)
+			}
+		default:
+			{
+				fmt.Printf("Unknown syntax. Please check your gosql version or typing \"help\" ~\n")
 			}
 		}
 
+	} else {
+		//进入语法树解析
+		var tree, err_crt = Create_syntax_tree(command)
+		if err_crt != nil {
+			return log.Runtime_log_err(&err.SyntaxError{
+				Msg: "Create syntax tree failed",
+			})
+		}
+		return excuteSQL(tree)
 	}
 
-	return &err.SyntaxError{
+	return log.Runtime_log_err(&err.SyntaxError{
 		Msg: "Continue command line",
+	})
+}
+
+func excuteSQL(tree *syntaxNode) error {
+	//这一步传入的一定是一个完整的语法树
+	switch tree.syntax_type {
+	case SELECT:
+		{
+			//fmt.Printf("%s\n", strings.Join(tree.value, " "))
+			fmt.Printf("%s\n", strings.Join(tree.left.value, " "))
+			if tree.right != nil {
+				if tree.right != nil {
+					fmt.Printf("%s\n", strings.Join(tree.right.value, " "))
+				}
+			}
+
+		}
+	case DELETE:
+		{
+			//fmt.Printf("%s\n", strings.Join(tree.value, " "))
+			fmt.Printf("%s\n", strings.Join(tree.left.value, " "))
+			if tree.right != nil {
+				if tree.right != nil {
+					fmt.Printf("%s\n", strings.Join(tree.right.value, " "))
+				}
+			}
+		}
 	}
+	return log.Runtime_log_err(&err.SyntaxError{
+		Msg: "Continue command line",
+	})
 }

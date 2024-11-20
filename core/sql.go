@@ -98,8 +98,8 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 	return trees, data_parsed, nil
 }
 
-// 模式匹配的封装
-func match(database string, table string, condition map[string]any, usage string) (string, []int, []string, []string, map[string]*bptree.Tree, error) {
+// 模式匹配的封装 含有模糊匹配选项即OR时
+func match(database string, table string, condition map[string]any, usage string,is_arc bool) (string, []int, []string, []string, map[string]*bptree.Tree, error) {
 	//先判断表是否存在
 	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
 	var end_target []int
@@ -229,6 +229,10 @@ func match(database string, table string, condition map[string]any, usage string
 				}
 			}
 		}
+	}
+	//模糊匹配时直接返回
+	if is_arc {
+		return table_path, target, keys_parsed, types_parsed, tree, nil
 	}
 
 	//进一步匹配target
@@ -395,9 +399,9 @@ func Insert(database string, table string, data map[string]any) error {
 }
 
 // 更新数据
-func Update(database string, table string, condition map[string]any, data map[string]any) error {
+func Update(database string, table string, condition map[string]any, data map[string]any,is_arc bool) error {
 	//插入前匹配
-	var table_path, end_target, keys_parsed, types_parsed, tree, err = match(database, table, condition, "update")
+	var table_path, end_target, keys_parsed, types_parsed, tree, err = match(database, table, condition, "update",is_arc)
 
 	if err != nil {
 		return err
@@ -524,10 +528,10 @@ func Update(database string, table string, condition map[string]any, data map[st
 }
 
 // 删除数据
-func Delete(database string, table string, condition map[string]any) error {
+func Delete(database string, table string, condition map[string]any,is_arc bool) error {
 	//删除前先判断表是否存在
 	//插入前匹配
-	var table_path, end_target, keys_parsed, types_parsed, _, err = match(database, table, condition, "delete")
+	var table_path, end_target, keys_parsed, types_parsed, _, err = match(database, table, condition, "delete",is_arc)
 
 	if err != nil {
 		return err
@@ -603,10 +607,10 @@ func Delete(database string, table string, condition map[string]any) error {
 }
 
 // 查询数据 返回{{"kali","howxu"},{"range","frank"}}
-func Select(database string, table string, need []string, condition map[string]any) ([][]string, error) {
+func Select(database string, table string, need []string, condition map[string]any,is_arc bool) ([][]string, error) {
 	var result [][]string
 	//插入前匹配
-	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select")
+	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select",is_arc)
 
 	if err != nil {
 		return result, err
