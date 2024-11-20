@@ -107,12 +107,27 @@ func excuteSQL(tree *syntaxNode) error {
 	case DELETE:
 		{
 			//fmt.Printf("%s\n", strings.Join(tree.value, " "))
-			fmt.Printf("%s\n", strings.Join(tree.left.value, " "))
+			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 			if tree.right != nil {
 				if tree.right != nil {
-					fmt.Printf("%s\n", strings.Join(tree.right.value, " "))
+					fmt.Printf("%s\n", strings.Join(tree.right.value, "|"))
 				}
 			}
+		}
+	case UPDATE:
+		{
+			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
+			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
+			if tree.right != nil {
+				if tree.right != nil {
+					fmt.Printf("%s\n", strings.Join(tree.right.value, "|"))
+				}
+			}
+		}
+	case INSERT:
+		{
+			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
+			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 		}
 	}
 	return log.Runtime_log_err(&err.SyntaxError{

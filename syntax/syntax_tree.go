@@ -20,6 +20,8 @@ var (
 	DELETE = goenum.NewEnum[NodeType]("DELETE")
 
 	FROM  = goenum.NewEnum[NodeType]("FROM")
+	SET   = goenum.NewEnum[NodeType]("SET")
+	INTO  = goenum.NewEnum[NodeType]("INTO")
 	WHERE = goenum.NewEnum[NodeType]("WHERE")
 )
 
@@ -61,13 +63,13 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 	switch units[0] {
 	case "SELECT", "Select", "select":
 		{
-			head = create_node(strings.Split(units[1], ","), SELECT)
+			head = create_node(strings.Split(strings.TrimSpace(units[1]), ","), SELECT)
 			if !(units[2] == "from" || units[2] == "FROM" || units[2] == "From") {
 				return head, log.Runtime_log_err(&err.SyntaxError{
 					Msg: "Error from location",
 				})
 			}
-			head.left = create_node(strings.Split(units[3], ","), FROM)
+			head.left = create_node(strings.Split(strings.TrimSpace(units[3]), ","), FROM)
 			if where_condition_proc(head, units, 4, 6) != nil {
 				return head, log.Runtime_log_err(&err.SyntaxError{
 					Msg: "Error Where conditionprocess",
@@ -82,12 +84,69 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 					Msg: "Error from location",
 				})
 			}
-			head.left = create_node(strings.Split(units[2], ","), FROM)
+			head.left = create_node(strings.Split(strings.TrimSpace(units[2]), ","), FROM)
 			if where_condition_proc(head, units, 3, 5) != nil {
 				return head, log.Runtime_log_err(&err.SyntaxError{
 					Msg: "Error Where conditionprocess",
 				})
 			}
+		}
+	case "UPDATE", "Update", "update":
+		{
+			head = create_node([]string{}, UPDATE)
+			head.value = strings.Split(strings.TrimSpace(units[1]), ",")
+			if !(units[2] == "SET" || units[2] == "set" || units[2] == "Set") {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Wrong parameters. Please check your sql sentences.",
+				})
+			}
+			//update set有一个专门的语法判定
+			var updates []string
+			for _, v := range strings.Split(strings.TrimSpace(units[3]), ",") {
+				for _, k := range strings.Split(strings.TrimSpace(v), "=") {
+					if k != "" {
+						updates = append(updates, k)
+					}
+				}
+
+			}
+			//判断是不是双数
+			//这里判断一下参数对不对 必须是双数
+			//fmt.Printf("%d\n", len(updates))
+			if len(updates)%2 != 0 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Wrong parameters. Please check your sql sentences.",
+				})
+			}
+			head.left = create_node(updates, SET)
+			if where_condition_proc(head, units, 4, 6) != nil {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Error Where conditionprocess",
+				})
+			}
+		}
+	case "INSERT", "Insert", "insert":
+		{
+			head = create_node([]string{}, UPDATE)
+			head.value = strings.Split(units[2], ",")
+			if !(units[3] == "VALUES" || units[3] == "values" || units[3] == "Values") {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Wrong parameters. Please check your sql sentences.",
+				})
+			}
+
+			//values嵌入
+			var updates []string
+			for _, v := range strings.Split(strings.TrimSpace(units[4]), ",") {
+
+				if v != "" {
+					updates = append(updates, v)
+				}
+
+			}
+
+			head.left = create_node(updates, SET)
+
 		}
 	}
 
@@ -108,7 +167,14 @@ func where_condition_proc(head *syntaxNode, units []string, where int, slen int)
 
 			if i+1 >= len(units) {
 				//没有下一个条件就可以积极了 那就只处理当前
-				head.right.value = append(head.right.value, strings.Split(units[i], "=")...)
+				for _, v := range strings.Split(strings.TrimSpace(units[i]), "=") {
+					if v != "" {
+						head.right.value = append(head.right.value, v)
+					}
+
+				}
+
+				//head.right.value = append(head.right.value, strings.Split(units[i], "=")...)
 				break
 			}
 
@@ -129,7 +195,21 @@ func where_condition_proc(head *syntaxNode, units []string, where int, slen int)
 			}
 
 			//更新右节点的参数数量
-			head.right.value = append(head.right.value, strings.Split(units[i], "=")...)
+			//注意这里要做空字符判定
+
+			for _, v := range strings.Split(strings.TrimSpace(units[i]), "=") {
+				if v != "" {
+					head.right.value = append(head.right.value, v)
+				}
+
+			}
+
+		}
+		//这里判断一下参数对不对 必须是双数
+		if len(head.right.value)%2 != 0 {
+			return log.Runtime_log_err(&err.SyntaxError{
+				Msg: "Wrong parameters. Please check your sql sentences.",
+			})
 		}
 	}
 	return nil
