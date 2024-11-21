@@ -19,10 +19,11 @@ var (
 	UPDATE = goenum.NewEnum[NodeType]("UPDATE")
 	DELETE = goenum.NewEnum[NodeType]("DELETE")
 
-	FROM  = goenum.NewEnum[NodeType]("FROM")
-	SET   = goenum.NewEnum[NodeType]("SET")
-	INTO  = goenum.NewEnum[NodeType]("INTO")
-	WHERE = goenum.NewEnum[NodeType]("WHERE")
+	FROM   = goenum.NewEnum[NodeType]("FROM")
+	SET    = goenum.NewEnum[NodeType]("SET")
+	INTO   = goenum.NewEnum[NodeType]("INTO")
+	WHERE  = goenum.NewEnum[NodeType]("WHERE")
+	VALUES = goenum.NewEnum[NodeType]("VALUES")
 )
 
 type syntaxNode struct {
@@ -50,6 +51,7 @@ func create_node(args []string, s_type NodeType) *syntaxNode {
 
 // 构造语法树 或者说叫解析语法
 func Create_syntax_tree(line string) (*syntaxNode, error) {
+
 	//空格的特殊处理 支持""语法 同时去掉""符号
 	var head *syntaxNode
 
@@ -64,6 +66,12 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 	switch units[0] {
 	case "SELECT", "Select", "select":
 		{
+			//长度判定给到这里
+			if len(units) < 4 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Not enough parameters",
+				})
+			}
 			head = create_node(strings.Split(strings.TrimSpace(units[1]), ","), SELECT)
 			if !(units[2] == "from" || units[2] == "FROM" || units[2] == "From") {
 				return head, log.Runtime_log_err(&err.SyntaxError{
@@ -79,6 +87,12 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 		}
 	case "DELETE", "Delete", "delete":
 		{
+			//长度判定给到这里
+			if len(units) < 3 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Not enough parameters",
+				})
+			}
 			head = create_node([]string{}, DELETE)
 			if !(units[1] == "from" || units[1] == "FROM" || units[1] == "From") {
 				return head, log.Runtime_log_err(&err.SyntaxError{
@@ -94,6 +108,12 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 		}
 	case "UPDATE", "Update", "update":
 		{
+			//长度判定给到这里
+			if len(units) < 4 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Not enough parameters",
+				})
+			}
 			head = create_node([]string{}, UPDATE)
 			head.value = strings.Split(strings.TrimSpace(units[1]), ",")
 			if !(units[2] == "SET" || units[2] == "set" || units[2] == "Set") {
@@ -128,26 +148,40 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 		}
 	case "INSERT", "Insert", "insert":
 		{
-			head = create_node([]string{}, UPDATE)
-			head.value = strings.Split(units[2], ",")
+			//长度判定给到这里
+			if len(units) < 5 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Not enough parameters",
+				})
+			}
+
+			head = create_node([]string{}, INSERT)
+			head.value = strings.Split(strings.TrimSpace(units[2]), ",")
 			if !(units[3] == "VALUES" || units[3] == "values" || units[3] == "Values") {
 				return head, log.Runtime_log_err(&err.SyntaxError{
 					Msg: "Wrong parameters. Please check your sql sentences.",
 				})
 			}
 
-			//values嵌入
-			var updates []string
+			//values有一个专门的语法判定
+			var values []string
 			for _, v := range strings.Split(strings.TrimSpace(units[4]), ",") {
-
-				if v != "" {
-					updates = append(updates, v)
+				for _, k := range strings.Split(strings.TrimSpace(v), "=") {
+					if k != "" {
+						values = append(values, k)
+					}
 				}
 
 			}
 
-			head.left = create_node(updates, SET)
+			head.left = create_node(values, VALUES)
 
+		}
+	default:
+		{
+			return head, log.Runtime_log_err(&err.SyntaxError{
+				Msg: "not a sql sentence",
+			})
 		}
 	}
 
@@ -155,7 +189,7 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 
 }
 
-//字符分割函数
+// 字符分割函数
 func Split(line string) ([]string, error) {
 	var result []string
 	//判断非法字符|
@@ -218,15 +252,15 @@ func Split(line string) ([]string, error) {
 
 // 封装处理Where条件的函数 语法树 语法单元 where出现的最小位置 完整的where语句的长度
 func where_condition_proc(head *syntaxNode, units []string, where int, slen int) error {
+
 	if len(units) >= slen && (units[where] == "WHERE" || units[where] == "where" || units[where] == "Where") {
-		//大于5说明可能存在WHERE条件 需要对右节点进行操作
-		//对第六参数进行操作
+		//可能存在WHERE条件 需要对右节点进行操作
+		if head.right == nil {
+			head.right = create_node([]string{}, WHERE)
+		}
+		//先判断只有where的情况
 		for i := where + 1; i < len(units); i += 2 {
 			//这个检测机制保证了不会是nil调用
-			if head.right == nil {
-				head.right = create_node([]string{}, WHERE)
-			}
-
 			if i+1 >= len(units) {
 				//没有下一个条件就可以积极了 那就只处理当前
 				for _, v := range strings.Split(strings.TrimSpace(units[i]), "=") {

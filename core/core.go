@@ -12,7 +12,7 @@ import (
 	"github.com/HowXu/gosql/util"
 )
 
-var Version string = "1.0-alpha"
+var Version string = "1.0-gamma"
 
 func Init() {
 	bptree.GLOBAL_DEBUG = false
@@ -62,12 +62,10 @@ func Init() {
 	if root_user_err == nil {
 		if len(root) == 0 {
 			//插入root用户
-			var ins = make(map[string]any)
-			ins["username"] = "root"
-			ins["password"] = "root"
+			
 			Get_Access("information_schema", "user")
 			Lock("information_schema", "user")
-			Insert("information_schema", "user", ins)
+			Insert("information_schema", "user", []string{"root","root"})
 			UnLock("information_schema", "user")
 		}
 	}
@@ -81,12 +79,9 @@ func Init() {
 	if root_per_err == nil {
 		if len(per) == 0 {
 			//插入root的权限表
-			var ins = make(map[string]any)
-			ins["user"] = "root"
-			ins["permits"] = "information_schema.permission,information_schema.user"
 			Get_Access("information_schema", "permission")
 			Lock("information_schema", "permission")
-			Insert("information_schema", "permission", ins)
+			Insert("information_schema", "permission", []string{"root","information_schema.permission,information_schema.user"})
 			UnLock("information_schema", "permission")
 		}
 	}

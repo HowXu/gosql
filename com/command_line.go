@@ -1,6 +1,7 @@
 package com
 
 import (
+
 	"github.com/HowXu/gosql/core"
 	"github.com/HowXu/gosql/err"
 	"github.com/HowXu/gosql/log"
@@ -43,7 +44,7 @@ func Command(args []string) (string, error) {
 			var condition = make(map[string]any)
 			condition["username"] = args[2]
 			var result, err_se = core.Select("information_schema", "user", []string{"username", "password"}, condition, false)
-
+			//fmt.Printf("result: %v\n", result)
 			if err_se != nil {
 				log.STD_SM_Log("Can't Query from user")
 				return "", log.Runtime_log_err(&err.CommandError{

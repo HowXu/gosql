@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/HowXu/bptree"
+	"github.com/HowXu/gosql/err"
 	"github.com/HowXu/gosql/log"
 	"github.com/HowXu/gosql/util"
 )
@@ -88,6 +89,12 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 		}
 
 		var data_parsed_line []string = strings.Split(string(data_line), "|")
+		//fmt.Printf("len(trees): %v\n", len(trees))
+		//fmt.Printf("len(data_parsed_line): %v\n", len(data_parsed_line))
+		//fmt.Printf("len(data_parsed): %v\n", len(data_parsed))
+		//fmt.Printf("trees: %v\n", trees)
+		//fmt.Printf("data_parsed_line: %v\n", data_parsed_line)
+		//fmt.Printf("data_parsed: %v\n", data_parsed)
 		for i := 0; i < len(trees); i++ {
 			//其实不用判断这一行数据对不对,因为插入时一定会保证正确
 			trees[data_parsed[i]].Insert(key, []byte(data_parsed_line[i]))
@@ -207,59 +214,75 @@ func match(database string, table string, condition map[string]any, usage string
 			switch types_parsed[key_index] {
 			case "string", "string[]":
 				{
+
 					if v, ok := c_value.(string); ok {
 						if string(record.Value) == v {
 							//对上一个了,先存起来,到for循环外面进行进一步匹配
 							addElement(i)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to string when match. Maybe a type error?", usage)
 					}
 
 				}
 			case "int":
 				{
-					if v, ok := c_value.(int); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.Atoi(p)
 						var int_v, err = strconv.Atoi(string(record.Value))
-						if err == nil {
+						if err_atoi == nil && err == nil {
 							if int_v == v {
 								addElement(i)
 							}
 						} else {
 							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
 					}
+
 				}
 			case "float":
 				{
-					if v, ok := c_value.(float64); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.ParseFloat(p, 64)
 						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
-						if err == nil {
+						if err_atoi == nil && err == nil {
 							if float_v == v {
 								addElement(i)
 							}
 						} else {
 							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 					}
 				}
 			case "boolean":
 				{
-					if v, ok := c_value.(bool); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.ParseBool(p)
 						var boolean_v, err = strconv.ParseBool(string(record.Value))
-						if err == nil {
-							if boolean_v == v {
+						if err_atoi == nil && err == nil {
+							if boolean_v && v {
 								addElement(i)
+							} else {
+								return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 							}
-						} else {
-							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 					}
+
 				}
 			}
 		}
 	}
+
+	//fmt.Printf("target: %v\n", target)
 
 	//模糊匹配或者无限制时直接返回
 	if is_arc || no_condition {
@@ -291,54 +314,68 @@ func match(database string, table string, condition map[string]any, usage string
 			switch types_parsed[key_index] {
 			case "string", "string[]":
 				{
+
 					if v, ok := c_value.(string); ok {
 						if string(record.Value) != v {
 							should_keep = false
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to string when match. Maybe a type error?", usage)
 					}
 
 				}
 			case "int":
 				{
-					if v, ok := c_value.(int); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.Atoi(p)
 						var int_v, err = strconv.Atoi(string(record.Value))
-						if err == nil {
+						if err_atoi == nil && err == nil {
 							if int_v != v {
 								should_keep = false
 							}
 						} else {
 							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to int when match. Maybe a type error?", usage)
 					}
+
 				}
 			case "float":
 				{
-					if v, ok := c_value.(float64); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.ParseFloat(p, 64)
 						var float_v, err = strconv.ParseFloat(string(record.Value), 64)
-						if err == nil {
+						if err_atoi == nil && err == nil {
 							if float_v != v {
 								should_keep = false
 							}
 						} else {
 							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 					}
 				}
 			case "boolean":
 				{
-					if v, ok := c_value.(bool); ok {
-						//转换record
+					//先断言成string
+					if p, ok := c_value.(string); ok {
+						v, err_atoi := strconv.ParseBool(p)
 						var boolean_v, err = strconv.ParseBool(string(record.Value))
-						if err == nil {
+						if err_atoi == nil && err == nil {
 							if boolean_v != v {
 								should_keep = false
+							} else {
+								return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 							}
-						} else {
-							return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to boolean when match. Maybe a type error?", usage)
 						}
+					} else {
+						return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("convert element from record to float when match. Maybe a type error?", usage)
 					}
+
 				}
 			}
 		}
@@ -352,7 +389,7 @@ func match(database string, table string, condition map[string]any, usage string
 }
 
 // 插入数据
-func Insert(database string, table string, data map[string]any) error {
+func Insert(database string, table string, data []string) error {
 	//向表写入字段 调用这个函数一定是在Create之后,因此table file至少有两行
 
 	//插入前先判断表是否存在
@@ -363,9 +400,9 @@ func Insert(database string, table string, data map[string]any) error {
 	}
 
 	//表存在,现在读取第二行
-	var table_file, err = os.OpenFile(table_path, os.O_RDONLY, 0644)
+	var table_file, err1 = os.OpenFile(table_path, os.O_RDONLY, 0644)
 
-	if err != nil {
+	if err1 != nil {
 		return log.ALL_ERR("Can't open table file when insert")
 	}
 
@@ -385,37 +422,47 @@ func Insert(database string, table string, data map[string]any) error {
 	//现在构造新的字符串插入到文件末尾
 	var input []string
 	var index int = 0
+	//这里要判断传入的长度和types是否相同
+	if len(types_parsed) != len(data) {
+		return &err.SyntaxError{
+			Msg: "Not suitable datas",
+		}
+	}
 	for _, value := range data {
 		// 尝试将any类型的值转换为string
 		switch types_parsed[index] {
 		case "string", "string[]":
 			{
-				if v, ok := value.(string); ok {
-					input = append(input, v)
-				} else {
-					return log.ALL_ERR("Error string or string type")
-				}
+				input = append(input, value)
 			}
 		case "int":
 			{
-				if v, ok := value.(int); ok {
-					input = append(input, string(v))
+
+				v, err_atoi := strconv.Atoi(value)
+				if err_atoi == nil {
+					input = append(input, strconv.FormatInt(int64(v), 10))
 				} else {
 					return log.ALL_ERR("Error int type")
 				}
+
 			}
 		case "float":
 			{
-				if v, ok := value.(float64); ok {
+				//先断言成string
+				v, err_atoi := strconv.ParseFloat(value, 64)
+				if err_atoi == nil {
 					input = append(input, fmt.Sprintf("%f", v))
 				} else {
 					return log.ALL_ERR("Error float type")
 				}
+
 			}
 		case "boolean":
 			{
-				if v, ok := value.(bool); ok {
-					input = append(input, fmt.Sprintf("%v", v))
+				//先断言成string
+				v, err_atoi := strconv.ParseBool(value)
+				if err_atoi == nil {
+					input = append(input, strconv.FormatBool(bool(v)))
 				} else {
 					return log.ALL_ERR("Error boolean type")
 				}
@@ -469,6 +516,7 @@ func Update(database string, table string, condition map[string]any, data map[st
 	var writer = bufio.NewWriter(file)
 	//先把头和数据类型读进去
 	writer.WriteString(strings.Join(keys_parsed, "|") + "\n")
+	//fmt.Printf("keys_parsed: %v\n", keys_parsed)
 	writer.WriteString(strings.Join(types_parsed, "|") + "\n")
 	var line_index int = 0
 	for _, index := range end_target {
@@ -478,53 +526,79 @@ func Update(database string, table string, condition map[string]any, data map[st
 			for key, c_value := range data {
 				//TODO: 冷暴力处理
 				var record, _ = tree[index_key].Find(index, true)
-
+				//fmt.Printf("string(record.Value): %v\n", string(record.Value))
 				switch types_parsed[type_index] {
 				case "string", "string[]":
 					{
-						if v, ok := c_value.(string); ok {
-							if key == index_key {
+						if key == index_key {
+							if v, ok := c_value.(string); ok {
 								result = append(result, v)
-							} else {
-								result = append(result, string(record.Value))
 							}
+						} else {
+							result = append(result, string(record.Value))
 						}
 
 					}
 				case "int":
 					{
-						if v, ok := c_value.(int); ok {
-							if key == index_key {
-								result = append(result, string(v))
-							} else {
-								result = append(result, string(record.Value))
+						if key == index_key {
+							//先断言成string
+							if p, ok := c_value.(string); ok {
+								v, err_atoi := strconv.Atoi(p)
+								if err_atoi == nil {
+									fmt.Printf("strconv.FormatInt(int64(v), 10): %v\n", strconv.FormatInt(int64(v), 10))
+									result = append(result, strconv.FormatInt(int64(v), 10))
+								}
 							}
+
+						} else {
+							result = append(result, string(record.Value))
 						}
+
 					}
 				case "float":
 					{
-						if v, ok := c_value.(float64); ok {
-							if key == index_key {
-								result = append(result, fmt.Sprintf("%f", v))
-							} else {
-								result = append(result, string(record.Value))
+						if key == index_key {
+							//先断言成string
+							if p, ok := c_value.(string); ok {
+								v, err_atoi := strconv.ParseFloat(p, 64)
+								if err_atoi == nil {
+									fmt.Printf("fmt.Sprintf(\"f\", v): %v\n", fmt.Sprintf("%f", v))
+									result = append(result, fmt.Sprintf("%f", v))
+								}
 							}
+						} else {
+							result = append(result, string(record.Value))
 						}
+
 					}
 				case "boolean":
 					{
-						if v, ok := c_value.(float64); ok {
-							if key == index_key {
-								result = append(result, fmt.Sprintf("%v", v))
-							} else {
-								result = append(result, string(record.Value))
+						//你应该先比较key
+						if key == index_key {
+							//fmt.Printf("case boolean\n")
+							if p, ok := c_value.(string); ok {
+								//fmt.Printf("invoke\n")
+								v, err_atoi := strconv.ParseBool(p)
+								if err_atoi == nil {
+									//fmt.Printf("do i done 1 ?")
+									//fmt.Printf("strconv.FormatBool(bool(v)): %v\n", strconv.FormatBool(bool(v)))
+									result = append(result, strconv.FormatBool(bool(v)))
+
+								}
 							}
+						} else {
+							//fmt.Printf("do i done 2 ?")
+							result = append(result, string(record.Value))
 						}
+						//先断言成string
+
 					}
 				}
 
 			}
 		}
+		//fmt.Printf("result: %v\n", result)
 		//接下来把字符串替换进去 这里的index从第三行开始计数为0
 		for {
 			//推进ReadLine函数
@@ -647,7 +721,7 @@ func Select(database string, table string, need []string, condition map[string]a
 	var result [][]string
 	//插入前匹配
 	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select", is_arc)
-
+	//fmt.Printf("end_target: %v\n", end_target)
 	if err != nil {
 		return result, err
 	}

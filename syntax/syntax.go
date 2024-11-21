@@ -62,9 +62,10 @@ func onSyntaxInput(user *Database_user, command string) error {
 		})
 	}
 
-	//小于四不可能是一个合法的SQL语句
-	if len(commands) < 4 {
-		//只有单个命令
+	//进入语法树解析
+	var tree, err_crt = Create_syntax_tree(command)
+	//语法树出不来说明有问题啊孩子
+	if err_crt != nil {
 		switch commands[0] {
 		case "exit":
 			{
@@ -98,20 +99,13 @@ func onSyntaxInput(user *Database_user, command string) error {
 			}
 		}
 
-	} else {
-		//进入语法树解析
-		var tree, err_crt = Create_syntax_tree(command)
-		if err_crt != nil {
-			return log.Runtime_log_err(&err.SyntaxError{
-				Msg: "Create syntax tree failed",
-			})
-		}
-		return excuteSQL(tree, user)
+		return log.Runtime_log_err(&err.SyntaxError{
+			Msg: "Continue Command line",
+		})
 	}
 
-	return log.Runtime_log_err(&err.SyntaxError{
-		Msg: "Continue command line",
-	})
+	return excuteSQL(tree, user)
+
 }
 
 func excuteSQL(tree *syntaxNode, user *Database_user) error {
@@ -187,7 +181,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						//不存在Where 那就是全部都要
 						var condition = make(map[string]any)
 						var heads []string
-						
+
 						condition["*"] = "*"
 
 						//添加头部
@@ -211,7 +205,6 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 							//自信大胆没有空指针访问
 							outputs += strings.Join(ot, " ") + "\n"
 						}
-						core.Get_Access(user.User, tree.left.value[0])
 					}
 				}
 				//看看outputs吧好孩子
@@ -222,32 +215,160 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 					Msg: "Permission delined",
 				})
 			}
-
 		}
 	case DELETE:
 		{
-			//fmt.Printf("%s\n", strings.Join(tree.value, " "))
-			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
-			if tree.right != nil {
-				if tree.right != nil {
-					fmt.Printf("%s\n", strings.Join(tree.right.value, "|"))
+			if core.PermissionCheck(user.User, user.Database, tree.left.value) {
+				//调用Delete
+				for _, tb := range tree.left.value {
+
+					if tree.right != nil {
+						//存在where条件时
+						var condition = make(map[string]any)
+						//var heads_index = 0
+						len := len(tree.right.value)
+						for i := 0; i < len; i += 2 {
+							condition[tree.right.value[i]] = tree.right.value[i+1]
+							//heads_index++
+						}
+						core.Get_Access(user.Database, tb)
+						core.Lock(user.Database, tb)
+						var err_sel = core.Delete(user.Database, tb, condition, tree.right.or)
+						core.UnLock(user.Database, tb)
+						if err_sel != nil {
+							return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Can't delete from table when sql excute",
+							})
+						}
+						fmt.Printf("Done\n")
+					} else {
+						//不存在Where 那就是全部删掉
+						var condition = make(map[string]any)
+						condition["*"] = "*"
+						//condition["password"] = "kali"
+						core.Get_Access(user.Database, tb)
+						core.Lock(user.Database, tb)
+						var err_sel = core.Delete(user.Database, tb, condition, false)
+						core.UnLock(user.Database, tb)
+						if err_sel != nil {
+							return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Can't delete from table when sql excute",
+							})
+						}
+						fmt.Printf("Done\n")
+					}
 				}
+
+			} else {
+				return log.Runtime_log_err(&err.PermissionError{
+					Msg: "Permission delined",
+				})
 			}
 		}
 	case UPDATE:
 		{
-			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
-			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
-			if tree.right != nil {
-				if tree.right != nil {
-					fmt.Printf("%s\n", strings.Join(tree.right.value, "|"))
+			//fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
+			//fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
+
+			if core.PermissionCheck(user.User, user.Database, tree.value) {
+				//调用UPDATE
+				for _, tb := range tree.value {
+
+					if tree.right != nil {
+						//存在where条件时
+						var condition = make(map[string]any)
+						//var heads_index = 0
+						len1 := len(tree.right.value)
+						for i := 0; i < len1; i += 2 {
+							condition[tree.right.value[i]] = tree.right.value[i+1]
+							//heads_index++
+						}
+						//这里要构造一个data进去
+						//存在where条件时
+						var data = make(map[string]any)
+						//var heads_index = 0
+						len2 := len(tree.left.value)
+						for i := 0; i < len2; i += 2 {
+							data[tree.left.value[i]] = tree.left.value[i+1]
+							//heads_index++
+						}
+						core.Get_Access(user.Database, tb)
+						core.Lock(user.Database, tb)
+						var err_sel = core.Update(user.Database, tb, condition, data, tree.right.or)
+						core.UnLock(user.Database, tb)
+						if err_sel != nil {
+							return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Can't delete from table when sql excute",
+							})
+						}
+						fmt.Printf("Done\n")
+					} else {
+						//不存在Where 那就是全部删掉
+						var condition = make(map[string]any)
+						condition["*"] = "*"
+						var data = make(map[string]any)
+						//var heads_index = 0
+						len2 := len(tree.left.value)
+						for i := 0; i < len2; i += 2 {
+							data[tree.left.value[i]] = tree.left.value[i+1]
+							//heads_index++
+						}
+						//condition["password"] = "kali"
+						core.Get_Access(user.Database, tb)
+						core.Lock(user.Database, tb)
+						var err_sel = core.Update(user.Database, tb, condition, data, false)
+						core.UnLock(user.Database, tb)
+						if err_sel != nil {
+							return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Can't delete from table when sql excute",
+							})
+						}
+						fmt.Printf("Done\n")
+					}
 				}
+
+			} else {
+				return log.Runtime_log_err(&err.PermissionError{
+					Msg: "Permission delined",
+				})
 			}
 		}
 	case INSERT:
 		{
+
 			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
 			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
+
+			if core.PermissionCheck(user.User, user.Database, tree.value) {
+				//调用UPDATE
+				for _, tb := range tree.value {
+					//这个不可能有where条件 如果出现了where就是错的
+					if tree.right != nil {
+						//存在where条件时
+						return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Unbelievable where existing o.O",
+							})
+					} else {
+						
+						//condition["password"] = "kali"
+						core.Get_Access(user.Database, tb)
+						core.Lock(user.Database, tb)
+						var err_sel = core.Insert(user.Database, tb, tree.left.value)
+						core.UnLock(user.Database, tb)
+						if err_sel != nil {
+							return log.Runtime_log_err(&err.DatabaseError{
+								Msg: "Can't delete from table when sql excute",
+							})
+						}
+						fmt.Printf("Done\n")
+					}
+				}
+
+			} else {
+				return log.Runtime_log_err(&err.PermissionError{
+					Msg: "Permission delined",
+				})
+			}
 		}
 	}
 	return log.Runtime_log_err(&err.SyntaxError{
