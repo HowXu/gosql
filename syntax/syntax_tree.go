@@ -1,7 +1,6 @@
 package syntax
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/HowXu/gosql/err"
@@ -54,18 +53,11 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 	//空格的特殊处理 支持""语法 同时去掉""符号
 	var head *syntaxNode
 
-	var units, err_splt = split(line)
+	var units, err_splt = Split(line)
 
 	if err_splt != nil {
 		return nil, log.Runtime_log_err(&err.SyntaxError{
 			Msg: "Split sql sentences failed",
-		})
-	}
-
-	//小于四不可能是一个合法的SQL语句
-	if len(units) < 4 {
-		return nil, log.Runtime_log_err(&err.SyntaxError{
-			Msg: "Wrong parameters. Please check your sql sentences.",
 		})
 	}
 
@@ -164,7 +156,7 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 }
 
 //字符分割函数
-func split(line string) ([]string, error) {
+func Split(line string) ([]string, error) {
 	var result []string
 	//判断非法字符|
 	var runes = []rune(line)

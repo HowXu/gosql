@@ -50,7 +50,7 @@ func Init() {
 	Create_Table("information_schema", "user", user)
 	var permission = make(map[string]string)
 	permission["user"] = "string"
-	permission["databases"] = "string[]"
+	permission["permits"] = "string[]"
 	Create_Table("information_schema", "permission", permission)
 	//Insert之前进行读取判断防止重复
 	var r_c = make(map[string]any)
@@ -83,7 +83,7 @@ func Init() {
 			//插入root的权限表
 			var ins = make(map[string]any)
 			ins["user"] = "root"
-			ins["databases"] = "permission,user"
+			ins["permits"] = "information_schema.permission,information_schema.user"
 			Get_Access("information_schema", "permission")
 			Lock("information_schema", "permission")
 			Insert("information_schema", "permission", ins)

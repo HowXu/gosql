@@ -27,3 +27,11 @@ type SyntaxError struct {
 func (e *SyntaxError) Error() string {
 	return "syntax error: " + e.Msg
 }
+
+type PermissionError struct {
+	Msg string
+}
+
+func (e *PermissionError) Error() string {
+	return "permission error: " + e.Msg
+}

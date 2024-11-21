@@ -99,7 +99,7 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 }
 
 // 模式匹配的封装 含有模糊匹配选项即OR时
-func match(database string, table string, condition map[string]any, usage string,is_arc bool) (string, []int, []string, []string, map[string]*bptree.Tree, error) {
+func match(database string, table string, condition map[string]any, usage string, is_arc bool) (string, []int, []string, []string, map[string]*bptree.Tree, error) {
 	//先判断表是否存在
 	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
 	var end_target []int
@@ -137,6 +137,10 @@ func match(database string, table string, condition map[string]any, usage string
 	}
 	types_parsed = strings.Split(string(types), "|")
 
+	if len(keys_parsed) == 0 || len(types_parsed) == 0 {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Zero kyes or types", usage)
+	}
+
 	//现在根据数据类型进行匹配
 	//解析数据库文件
 	tree, _, err := paser_low(database, table)
@@ -155,21 +159,47 @@ func match(database string, table string, condition map[string]any, usage string
 		target = append(target, v) // 添加新元素
 	}
 
+	var no_condition = false
+
 	for c_key, c_value := range condition {
+		//判断是不是no_consition条件
+		if c_key == "*" && c_value == "*" {
+			no_condition = true
+		}
 		//全页匹配数据库文件
 		var key_index int
 		//获取c_key的横向索引值
+		//这里有逻辑问腿啊bro
+		var not_find bool = true
 		for idx, ky := range keys_parsed {
 			if ky == c_key {
 				key_index = idx
+				not_find = false
 				break
-			} else {
-				return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("No such key in table. unable to get condition", usage)
+			}
+		}
+
+		if not_find && !no_condition {
+			return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("No such key in table. unable to get condition", usage)
+		}
+
+		//一个no_condition专门的匹配
+		if no_condition {
+			for i := 0; ; i++ {
+				record, _ := tree[keys_parsed[0]].Find(i, true)
+				if record == nil {
+					break
+				}
+				addElement(i)
 			}
 
 		}
-		//类型匹配
+
+		//类型匹配和数据匹配
 		for i := 0; ; i++ {
+			if no_condition {
+				break
+			}
 			record, _ := tree[c_key].Find(i, true)
 			if record == nil {
 				break
@@ -230,8 +260,9 @@ func match(database string, table string, condition map[string]any, usage string
 			}
 		}
 	}
-	//模糊匹配时直接返回
-	if is_arc {
+
+	//模糊匹配或者无限制时直接返回
+	if is_arc || no_condition {
 		return table_path, target, keys_parsed, types_parsed, tree, nil
 	}
 
@@ -243,11 +274,16 @@ func match(database string, table string, condition map[string]any, usage string
 		for c_key, c_value := range condition {
 			var key_index int
 			//获取c_key的横向索引值
+			//这里有逻辑问腿啊bro
+			var not_find bool = true
 			for idx, ky := range keys_parsed {
 				if ky == c_key {
 					key_index = idx
+					not_find = false
 					break
 				}
+			}
+			if not_find {
 				return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("No such key in table. unable to get condition", usage)
 			}
 			//找到对应c_key的其他键值
@@ -399,9 +435,9 @@ func Insert(database string, table string, data map[string]any) error {
 }
 
 // 更新数据
-func Update(database string, table string, condition map[string]any, data map[string]any,is_arc bool) error {
+func Update(database string, table string, condition map[string]any, data map[string]any, is_arc bool) error {
 	//插入前匹配
-	var table_path, end_target, keys_parsed, types_parsed, tree, err = match(database, table, condition, "update",is_arc)
+	var table_path, end_target, keys_parsed, types_parsed, tree, err = match(database, table, condition, "update", is_arc)
 
 	if err != nil {
 		return err
@@ -528,10 +564,10 @@ func Update(database string, table string, condition map[string]any, data map[st
 }
 
 // 删除数据
-func Delete(database string, table string, condition map[string]any,is_arc bool) error {
+func Delete(database string, table string, condition map[string]any, is_arc bool) error {
 	//删除前先判断表是否存在
 	//插入前匹配
-	var table_path, end_target, keys_parsed, types_parsed, _, err = match(database, table, condition, "delete",is_arc)
+	var table_path, end_target, keys_parsed, types_parsed, _, err = match(database, table, condition, "delete", is_arc)
 
 	if err != nil {
 		return err
@@ -607,10 +643,10 @@ func Delete(database string, table string, condition map[string]any,is_arc bool)
 }
 
 // 查询数据 返回{{"kali","howxu"},{"range","frank"}}
-func Select(database string, table string, need []string, condition map[string]any,is_arc bool) ([][]string, error) {
+func Select(database string, table string, need []string, condition map[string]any, is_arc bool) ([][]string, error) {
 	var result [][]string
 	//插入前匹配
-	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select",is_arc)
+	var table_path, end_target, _, _, tree, err = match(database, table, condition, "select", is_arc)
 
 	if err != nil {
 		return result, err
@@ -706,4 +742,69 @@ func Create_Table(database string, table string, head map[string]string) error {
 	}
 	writer.Flush()
 	return nil
+}
+
+func GetAllTypes(database string, table string) ([]string, error) {
+	//先判断表是否存在
+	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
+	var types_parsed []string
+
+	var _, stat = os.Stat(table_path)
+	if stat != nil {
+		return types_parsed, log.ALL_ERR("match data to an unexist table")
+	}
+
+	//表存在,现在读取第二行
+	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
+
+	if err_p != nil {
+		return types_parsed, log.ALL_ERR("Can't open table file when match")
+	}
+
+	//读完并且构造字符串后关掉文件 防止中途return
+	defer table_file.Close()
+
+	var reader = bufio.NewReader(table_file)
+	//空读取第一行
+	reader.ReadLine()
+	//读取第二行获取数据类型
+	//这里支持的有string int float boolean string[]
+	var types, _, err_rd = reader.ReadLine()
+	if err_rd != nil {
+		return types_parsed, log.ALL_ERR("Read data type failed")
+	}
+
+	types_parsed = strings.Split(string(types), "|")
+	return types_parsed, nil
+}
+
+func GetAllKeys(database string, table string) ([]string, error) {
+	//先判断表是否存在
+	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
+	var keys_parsed []string
+
+	var _, stat = os.Stat(table_path)
+	if stat != nil {
+		return keys_parsed, log.ALL_ERR("match data to an unexist table")
+	}
+
+	//表存在,现在读取第二行
+	var table_file, err_p = os.OpenFile(table_path, os.O_RDONLY, 0644)
+
+	if err_p != nil {
+		return keys_parsed, log.ALL_ERR("Can't open table file when match")
+	}
+
+	//读完并且构造字符串后关掉文件 防止中途return
+	defer table_file.Close()
+
+	var reader = bufio.NewReader(table_file)
+
+	var types, _, err_rd = reader.ReadLine()
+	if err_rd != nil {
+		return keys_parsed, log.ALL_ERR("Read keys failed")
+	}
+
+	keys_parsed = strings.Split(string(types), "|")
+	return keys_parsed, nil
 }
