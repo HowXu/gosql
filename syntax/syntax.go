@@ -91,6 +91,8 @@ func onSyntaxInput(user *Database_user, command string) error {
 }
 
 func excuteSQL(tree *syntaxNode) error {
+	//执行之前做一遍权限检查
+
 	//这一步传入的一定是一个完整的语法树
 	switch tree.syntax_type {
 	case SELECT:
@@ -133,4 +135,8 @@ func excuteSQL(tree *syntaxNode) error {
 	return log.Runtime_log_err(&err.SyntaxError{
 		Msg: "Continue command line",
 	})
+}
+
+func permissionCheck() bool{
+	return false
 }

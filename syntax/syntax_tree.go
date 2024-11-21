@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/HowXu/gosql/err"
@@ -50,9 +51,17 @@ func create_node(args []string, s_type NodeType) *syntaxNode {
 
 // 构造语法树 或者说叫解析语法
 func Create_syntax_tree(line string) (*syntaxNode, error) {
-	//使用空格分开所有部分
+	//空格的特殊处理 支持""语法 同时去掉""符号
 	var head *syntaxNode
-	var units = strings.Split(line, " ")
+
+	var units, err_splt = split(line)
+
+	if err_splt != nil {
+		return nil, log.Runtime_log_err(&err.SyntaxError{
+			Msg: "Split sql sentences failed",
+		})
+	}
+
 	//小于四不可能是一个合法的SQL语句
 	if len(units) < 4 {
 		return nil, log.Runtime_log_err(&err.SyntaxError{
@@ -152,6 +161,67 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 
 	return head, nil
 
+}
+
+//字符分割函数
+func split(line string) ([]string, error) {
+	var result []string
+	//判断非法字符|
+	var runes = []rune(line)
+	//按每个字符读取
+	var is_inline bool = false
+	var standar_runes []rune
+	for _, v := range runes {
+		//判断非法字符
+		if v == '|' {
+			return result, log.Runtime_log_err(&err.SyntaxError{
+				Msg: "Illegal chars in sql sentence",
+			})
+		}
+
+		//如果读取到了"符号 反转inline
+		if v == '"' {
+			if is_inline {
+				is_inline = false
+			} else {
+				is_inline = true
+			}
+			//并且直接跳过
+			continue
+		}
+
+		//空格处理
+		if v == ' ' {
+			//如果是在in_line中 则直接加入
+			if is_inline {
+				standar_runes = append(standar_runes, v)
+			} else {
+				//否则结束standar_runes并且加入results
+				result = append(result, string(standar_runes))
+				//清空
+				standar_runes = []rune{}
+				continue
+			}
+		}
+
+		//正常字符处理
+		standar_runes = append(standar_runes, v)
+
+	}
+	//判定并且加入最后一个standar_runes
+	if len(standar_runes) != 0 {
+		result = append(result, string(standar_runes))
+		//剩下的交给gc
+	}
+
+	//然后剔除result中所有为空的字符串
+	var r []string
+	for _, v1 := range result {
+		if v1 != "" {
+			r = append(r, v1)
+		}
+	}
+	return r, nil
 }
 
 // 封装处理Where条件的函数 语法树 语法单元 where出现的最小位置 完整的where语句的长度
