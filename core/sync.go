@@ -33,7 +33,7 @@ func Lock(database string, table string) error {
 	//遍历表文件是否存在该元素
 	var exist bool = false
 	for _, tb := range tables {
-		if tb == database+","+table {
+		if tb == database+"."+table {
 			exist = true
 			break
 		}
@@ -53,7 +53,7 @@ func Lock(database string, table string) error {
 		//if err_sk != nil {
 		//	return log.ALL_ERR("Can't seek to end in lock file")
 		//}
-		LockFilWriter.WriteString(database + "," + table + "\n")
+		LockFilWriter.WriteString(database + "." + table + "\n")
 	}
 
 	LockFilWriter.Flush()
@@ -79,7 +79,7 @@ func UnLock(database string, table string) error {
 	//遍历表文件是否存在该元素
 	var location int = -1
 	for index, tb := range tables {
-		if tb == database+","+table {
+		if tb == database+"."+table {
 			location = index
 			break
 		}
@@ -135,7 +135,7 @@ func GetLockStat(database string, table string) bool {
 	//遍历表文件是否存在该元素
 
 	for _, tb := range tables {
-		if tb == database+","+table {
+		if tb == database+"."+table {
 			exist = true
 			break
 		}
