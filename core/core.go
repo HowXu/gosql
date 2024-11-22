@@ -42,16 +42,11 @@ func Init() {
 
 	//最基本的user表,权限表
 	//新建数据库
-	Create_Database("information_schema")
+	Create_Database("information_schema","root")
 	//新建表
-	var user = make(map[string]string)
-	user["username"] = "string"
-	user["password"] = "string"
-	Create_Table("information_schema", "user", user)
-	var permission = make(map[string]string)
-	permission["user"] = "string"
-	permission["permits"] = "string[]"
-	Create_Table("information_schema", "permission", permission)
+
+	Create_Table_No_Map("root","information_schema", "user",[]string{"username","string","password","string"})
+	Create_Table_No_Map("root","information_schema", "permission", []string{"user","string","permits","string[]"})
 	//Insert之前进行读取判断防止重复
 	var r_c = make(map[string]any)
 	r_c["username"] = "root"
@@ -74,6 +69,7 @@ func Init() {
 	p_c["user"] = "root"
 	Get_Access("information_schema", "permission")
 	Lock("information_schema", "permission")
+	//对于第一次运行这里有一个有趣的循环效应
 	per, root_per_err := Select("information_schema", "permission", []string{"user"}, p_c,false)
 	UnLock("information_schema", "permission")
 	if root_per_err == nil {
@@ -81,7 +77,7 @@ func Init() {
 			//插入root的权限表
 			Get_Access("information_schema", "permission")
 			Lock("information_schema", "permission")
-			Insert("information_schema", "permission", []string{"root","information_schema.permission,information_schema.user"})
+			Insert("information_schema", "permission", []string{"root","information_schema.*"})
 			UnLock("information_schema", "permission")
 		}
 	}

@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/HowXu/gosql/err"
@@ -18,12 +19,14 @@ var (
 	INSERT = goenum.NewEnum[NodeType]("INSERT")
 	UPDATE = goenum.NewEnum[NodeType]("UPDATE")
 	DELETE = goenum.NewEnum[NodeType]("DELETE")
+	CREATE = goenum.NewEnum[NodeType]("CREATE")
 
-	FROM   = goenum.NewEnum[NodeType]("FROM")
-	SET    = goenum.NewEnum[NodeType]("SET")
-	INTO   = goenum.NewEnum[NodeType]("INTO")
-	WHERE  = goenum.NewEnum[NodeType]("WHERE")
-	VALUES = goenum.NewEnum[NodeType]("VALUES")
+	FROM    = goenum.NewEnum[NodeType]("FROM")
+	SET     = goenum.NewEnum[NodeType]("SET")
+	INTO    = goenum.NewEnum[NodeType]("INTO")
+	WHERE   = goenum.NewEnum[NodeType]("WHERE")
+	VALUES  = goenum.NewEnum[NodeType]("VALUES")
+	COLUMNS = goenum.NewEnum[NodeType]("COLUMNS")
 )
 
 type syntaxNode struct {
@@ -176,6 +179,59 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 
 			head.left = create_node(values, VALUES)
 
+		}
+	case "CREATE", "Create", "create":
+		{
+			//长度判定给到这里
+			if len(units) < 4 && !(units[1] == "DATABASE" || units[1] == "database" || units[1] == "Database") {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Not enough parameters",
+				})
+			}
+			if units[1] == "DATABASE" || units[1] == "database" || units[1] == "Database" {
+				return head, &err.SyntaxError{
+					Msg: "not invoke here",
+				}
+			}
+			head = create_node([]string{}, CREATE)
+
+			head.value = strings.Split(strings.TrimSpace(units[2]), ",")
+			//专门的语法判定判定第四个
+			var columns []string
+			for _, v := range strings.Split(strings.TrimSpace(units[3]), ",") {
+				for _, k := range strings.Split(strings.TrimSpace(v), "=") {
+					if k != "" {
+						columns = append(columns, k)
+					}
+				}
+
+			}
+			fmt.Printf("columns: %v\n", columns)
+			//判断是不是双数
+			if len(columns)%2 != 0 {
+				return head, log.Runtime_log_err(&err.SyntaxError{
+					Msg: "Wrong parameters. Please check your sql sentences.",
+				})
+			}
+			//判断有没有抽象好活
+			for i := 1; i < len(columns); i += 2 {
+				switch columns[i] {
+				case "string", "string[]", "int", "float", "boolean":
+					{
+
+					}
+				default:
+					{
+						return nil, &err.SyntaxError{
+							Msg: "Not a suitable data type",
+						}
+					}
+				}
+			}
+			head.left = create_node(columns, COLUMNS)
+			return head, &err.SyntaxError{
+				Msg: "Just interdict when create",
+			}
 		}
 	default:
 		{

@@ -765,12 +765,201 @@ func Select(database string, table string, need []string, condition map[string]a
 }
 
 // 新建数据库
-func Create_Database(database string) error {
+func Create_Database(database string, user string) error {
+	//直接判断存不存在
+	var _, exsit = os.Stat(fmt.Sprintf("./db/%s", database))
+	if exsit == nil {
+		return log.Runtime_log_err(&err.DatabaseError{Msg: "Exsiting databse"})
+	}
+	//如果是root应该直接允许 记得给自己权限
+	if user == "root" {
+		//拿取root当前的信息
+		var condition_r = make(map[string]any)
+		condition_r["user"] = "root"
+		Lock("information_schema", "permission")
+		var gets_r, se_err_r = Select("information_schema", "permission", []string{"permits"}, condition_r, false)
+		UnLock("information_schema", "permission")
+		if se_err_r != nil {
+			return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't select from permission when create database"})
+		}
+		var getss_r []string
+		getss_r = (strings.Split(gets_r[0][0], ","))
+		var data_r = make(map[string]any)
+		data_r["permits"] = strings.Join(append(getss_r, database+".*"), ",")
+		Get_Access("information_schema", "permission")
+		Lock("information_schema", "permission")
+		var err_up = Update("information_schema", "permission", condition_r, data_r, false)
+		UnLock("information_schema", "permission")
+		if err_up != nil {
+			return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't update from permission when create database"})
+		}
+		return util.Create_Folder(fmt.Sprintf("./db/%s", database))
+	}
+	//这样百分百不存在
+
+	//最后创建文件夹
+	return create_database_User(database, user)
+}
+
+// 不管创建什么数据库 都有我root的权限
+func create_database_User(database string, user string) error {
+	//不只是简单的直接创建 创建调用的用户应该要被更新到permission里面
+	Get_Access("information_schema", "permission")
+	//拿取这个用户当前的信息
+	var condition = make(map[string]any)
+	condition["user"] = user
+	Lock("information_schema", "permission")
+	var gets, se_err = Select("information_schema", "permission", []string{"permits"}, condition, false)
+	UnLock("information_schema", "permission")
+	if se_err != nil {
+		return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't select from permission when create database"})
+	}
+
+	//拿取root当前的信息
+	var condition_r = make(map[string]any)
+	condition_r["user"] = "root"
+	Lock("information_schema", "permission")
+	var gets_r, se_err_r = Select("information_schema", "permission", []string{"permits"}, condition_r, false)
+	UnLock("information_schema", "permission")
+	if se_err_r != nil {
+		return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't select from permission when create database"})
+	}
+
+	//加进去 因为这个数据库不存在所以这一步肯定是加入一个全新的元素
+	var getss []string
+	var getss_r []string
+	if len(gets) > 0 && len(gets[0]) > 0 {
+		getss = (strings.Split(gets[0][0], ","))
+	}
+	getss_r = (strings.Split(gets_r[0][0], ","))
+
+	var data = make(map[string]any)
+	data["permits"] = strings.Join(append(getss, database+".*"), ",")
+	var data_r = make(map[string]any)
+	data_r["permits"] = strings.Join(append(getss_r, database+".*"), ",")
+	//接下来塞回去
+	if len(gets) > 0 && len(gets[0]) > 0 {
+		Get_Access("information_schema", "permission")
+		Lock("information_schema", "permission")
+		var err_up = Update("information_schema", "permission", condition, data, false)
+		UnLock("information_schema", "permission")
+
+		if err_up != nil {
+			return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't update from permission when create database"})
+		}
+	} else {
+		//0应该Insert
+		Get_Access("information_schema", "permission")
+		Lock("information_schema", "permission")
+		var err_up = Insert("information_schema", "permission", []string{user, strings.Join(append(getss, database+".*"), ",")})
+		UnLock("information_schema", "permission")
+
+		if err_up != nil {
+			return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't update from permission when create database"})
+		}
+	}
+
+	Get_Access("information_schema", "permission")
+	Lock("information_schema", "permission")
+	var err_up = Update("information_schema", "permission", condition_r, data_r, false)
+	UnLock("information_schema", "permission")
+	if err_up != nil {
+		return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't update from permission when create database"})
+	}
+
 	return util.Create_Folder(fmt.Sprintf("./db/%s", database))
 }
 
+// 请确保调用该函数时head长度为2的倍数
+func Create_Table_No_Map(user string, database string, table string, head []string) error {
+
+	//接下来判定一下这个表的权限是不是到位了
+	//如果是root应该直接放行
+	if user == "root" {
+		return create_table_User_No_Map(database, table, head)
+	}
+
+	//true说明允许创建表
+	if !PermissionCheck(user, database) {
+		return &err.DatabaseError{Msg: "Permission delined when create table"}
+	}
+
+	return create_table_User_No_Map(database, table, head)
+
+}
+
+// 请确保调用该函数时head长度为2的倍数
+func create_table_User_No_Map(database string, table string, head []string) error {
+	//传入应该有表头
+	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
+	if len(head) == 0 {
+		return log.ALL_ERR("Empty table head")
+	}
+
+	util.Create_File_only(table_path)
+	//写入表头
+
+	//防止覆写
+	var info, _ = os.Stat(table_path)
+	if info.Size() != 0 {
+		return log.ALL_LOG("Not an empty table when create")
+	}
+
+	var file, err = os.OpenFile(table_path, os.O_APPEND|os.O_WRONLY, 0644)
+	defer file.Close()
+	if err != nil {
+		log.FileErr("Can't open table file", table)
+	}
+
+	var writer = bufio.NewWriter(file)
+
+	//字符串拼接
+	//把所有键拿到手
+	var heads []string
+	var types []string
+	//只需要改变一下for循环就是一个专用的创建表
+	for i := 0; i < len(head); i += 2 {
+		heads = append(heads, head[i])
+		types = append(types, head[i+1])
+	}
+
+	fmt.Printf("heads: %v\n", heads)
+	fmt.Printf("types: %v\n", types)
+
+	var heads_output = strings.Join(heads, "|") + "\n"
+	var types_output = strings.Join(types, "|") + "\n"
+	//写入文件
+	var _, err_r = writer.WriteString(heads_output)
+	if err_r != nil {
+		return log.ALL_ERR("Write table file failed")
+	}
+	var _, err_r2 = writer.WriteString(types_output)
+	if err_r2 != nil {
+		return log.ALL_ERR("Write table file failed")
+	}
+	writer.Flush()
+	return nil
+}
+
 // 新建表
-func Create_Table(database string, table string, head map[string]string) error {
+func Create_Table(user string, database string, table string, head map[string]string) error {
+
+	//接下来判定一下这个表的权限是不是到位了
+	//如果是root应该直接放行
+	if user == "root" {
+		return create_table_User(database, table, head)
+	}
+
+	//true说明允许创建表
+	if !PermissionCheck(user, database) {
+		return &err.DatabaseError{Msg: "Permission delined when create table"}
+	}
+
+	return create_table_User(database, table, head)
+
+}
+
+func create_table_User(database string, table string, head map[string]string) error {
 	//传入应该有表头
 	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
 	if len(head) == 0 {
@@ -802,6 +991,9 @@ func Create_Table(database string, table string, head map[string]string) error {
 		heads = append(heads, key)
 		types = append(types, value)
 	}
+
+	fmt.Printf("heads: %v\n", heads)
+	fmt.Printf("types: %v\n", types)
 
 	var heads_output = strings.Join(heads, "|") + "\n"
 	var types_output = strings.Join(types, "|") + "\n"

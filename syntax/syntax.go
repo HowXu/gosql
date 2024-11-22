@@ -2,6 +2,8 @@ package syntax
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/HowXu/gosql/core"
@@ -83,14 +85,110 @@ func onSyntaxInput(user *Database_user, command string) error {
 
 					//查询一下有没有这个数据库
 					if core.CheckDatabase(commands[2]) {
-						user.Database = commands[2]
-						fmt.Printf("switch to %s\n", commands[2])
+						//权限判断
+						if core.PermissionCheck(user.User, commands[2]) {
+							user.Database = commands[2]
+							fmt.Printf("switch to %s\n", commands[2])
+						} else {
+							fmt.Printf("Permissiom delined\n")
+						}
+
 					} else {
 						fmt.Printf("No such database uhh\n")
 					}
 
 				} else {
 					fmt.Printf("Unknown syntax. Please check your gosql version or typing \"help\" ~\n")
+				}
+			}
+			//创建数据库和表
+		case "Create", "CREATE", "create":
+			{
+				if len(commands) >= 3 {
+					if commands[1] == "DATABASE" || commands[1] == "database" || commands[1] == "Database" {
+						//创建数据库
+						core.Create_Database(commands[2], user.User)
+					} else if commands[1] == "TABLE" || commands[1] == "table" || commands[1] == "Table" {
+						//创建表
+						if user.Database == "" {
+							fmt.Printf("No database was used\n")
+						} else {
+							if tree == nil {
+								return log.Runtime_log_err(&err.SyntaxError{
+									Msg: "Bad data type",
+								})
+							}
+							//使用语法树解析 没错这个就是拿捏指针的自信
+							core.Create_Table_No_Map(user.User, user.Database, tree.value[0], tree.left.value)
+						}
+					} else {
+						fmt.Printf("No such thing to create\n")
+					}
+				} else {
+					fmt.Printf("Not a standard create syntax\n")
+				}
+			}
+			//打印可用数据库和数据表
+		case "SHOW", "Show", "show":
+			{
+				if len(commands) == 2 {
+					if commands[1] == "DATABASES" || commands[1] == "databases" || commands[1] == "Databases" {
+						//打印可访问数据库 首先用户一定存在
+						var results []string
+						core.Get_Access("information_schema", "permission")
+						core.Lock("information_schema", "permission")
+						condition := make(map[string]any)
+						condition["user"] = user.User
+						gets, s_err := core.Select("information_schema", "permission", []string{"permits"}, condition, false)
+						core.UnLock("information_schema", "permission")
+						if s_err != nil {
+							return log.Runtime_log_err(&err.SyntaxError{
+								Msg: "Can't select when show databases",
+							})
+						}
+						if len(gets) != 0 && len(gets[0]) != 0 {
+							for _, v := range strings.Split(gets[0][0], ",") {
+								//自信指针访问
+								results = append(results, strings.Split(v, ".")[0])
+							}
+						} else {
+							fmt.Printf("No database you can use\n")
+						}
+						//最后答应出来
+						fmt.Printf("strings.Join(results):\n %v\n", strings.Join(results, "\n"))
+					} else if commands[1] == "TABLES" || commands[1] == "tables" || commands[1] == "Tables" {
+						//打印数据库下表
+						var results []string
+						if user.Database == "" {
+							fmt.Printf("No database was used, there is nothing\n")
+						} else {
+							//获取该目录下所有table文件名称
+							dirPath := fmt.Sprintf("./db/%s", user.Database)
+							err2 := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+								if err != nil {
+									return err
+								}
+								if !info.IsDir() {
+									// 获取文件名
+									fileName := filepath.Base(path)
+									// 去除文件扩展名
+									results = append(results, strings.TrimSuffix(fileName, filepath.Ext(fileName)))
+								}
+								return nil
+							})
+
+							if err2 != nil {
+								return log.Runtime_log_err(&err.SyntaxError{
+									Msg: "Can't show tables",
+								})
+							}
+							fmt.Printf("strings.Join(results):\n%v\n", strings.Join(results, "\n"))
+						}
+					} else {
+						fmt.Printf("No such thing to show\n")
+					}
+				} else {
+					fmt.Printf("No thing to show\n")
 				}
 			}
 		default:
@@ -121,7 +219,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 		{
 			//权限判断
 			//从树里拿表和数据库我就不说了
-			if core.PermissionCheck(user.User, user.Database, tree.left.value) {
+			if core.PermissionCheck(user.User, user.Database) {
 				//fmt.Printf("%s\n", strings.Join(tree.value, " "))
 				//fmt.Printf("%s\n", strings.Join(tree.left.value, " "))
 				//调用Select
@@ -218,7 +316,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 		}
 	case DELETE:
 		{
-			if core.PermissionCheck(user.User, user.Database, tree.left.value) {
+			if core.PermissionCheck(user.User, user.Database) {
 				//调用Delete
 				for _, tb := range tree.left.value {
 
@@ -270,7 +368,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 			//fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
 			//fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 
-			if core.PermissionCheck(user.User, user.Database, tree.value) {
+			if core.PermissionCheck(user.User, user.Database) {
 				//调用UPDATE
 				for _, tb := range tree.value {
 
@@ -339,17 +437,17 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
 			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 
-			if core.PermissionCheck(user.User, user.Database, tree.value) {
+			if core.PermissionCheck(user.User, user.Database) {
 				//调用UPDATE
 				for _, tb := range tree.value {
 					//这个不可能有where条件 如果出现了where就是错的
 					if tree.right != nil {
 						//存在where条件时
 						return log.Runtime_log_err(&err.DatabaseError{
-								Msg: "Unbelievable where existing o.O",
-							})
+							Msg: "Unbelievable where existing o.O",
+						})
 					} else {
-						
+
 						//condition["password"] = "kali"
 						core.Get_Access(user.Database, tb)
 						core.Lock(user.Database, tb)

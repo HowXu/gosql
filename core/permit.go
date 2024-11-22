@@ -11,7 +11,7 @@ import (
 )
 
 // 判断是否有权限进行操作
-func PermissionCheck(user string, database string, table []string) bool {
+func PermissionCheck(user string, database string) bool {
 	//首先读取permission表
 	Get_Access("information_schema", "permission")
 	Lock("information_schema", "permission")
@@ -33,21 +33,16 @@ func PermissionCheck(user string, database string, table []string) bool {
 		})
 		return false
 	}
-	//接下来判断
-	rt := true
-	for _, tb := range table {
-		var target = database + "." + tb
-		var in_circle = false
-		for _, v := range strings.Split(gets[0][0], ",") {
-			if v == target {
-				in_circle = true
-				break
-			}
+	//接下来判断有没有数据库的访问权限
+	rt := false
+
+	//通配符式的权限表 表示拥有全部权限
+	var any_target = database + ".*"
+	for _, v := range strings.Split(gets[0][0], ",") {
+		if v == any_target {
+			rt = true
+			break
 		}
-		if in_circle {
-			continue
-		}
-		rt = false
 	}
 
 	return rt

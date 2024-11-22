@@ -11,6 +11,7 @@ func Create_Folder(path string) error {
 	if exsit == nil {
 		return nil
 	}
+	
 	if err != nil {
 		//说明文件夹存在或者权限问题 打印Log
 		log.STDLOG("文件夹创建失败",path)
