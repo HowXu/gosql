@@ -235,9 +235,9 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 		}
 	default:
 		{
-			return head, log.Runtime_log_err(&err.SyntaxError{
+			return head, &err.SyntaxError{
 				Msg: "not a sql sentence",
-			})
+			}
 		}
 	}
 

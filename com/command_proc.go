@@ -16,7 +16,6 @@ func show_version() {
 
 func login(user string, password string) (string, error) {
 	//Linux格式的密码输入
-	fmt.Print("Enter your password:")
 	fd := int(os.Stdin.Fd())
 
 	// 使标准输入的文件描述符进入原始模式，这样就不会显示输入的字符
@@ -26,24 +25,32 @@ func login(user string, password string) (string, error) {
 	}
 	defer term.Restore(fd, oldState) // 确保在函数返回时恢复终端状态
 
-	// 读取密码
-	i_password, i_err := term.ReadPassword(fd)
-	if i_err != nil {
-		return user, log.ALL_ERR("Can't read password from command line")
-	}
+	//三次输入密码的机会
+	for i := 0; i < 3; i++ {
+		fmt.Print("Enter your password:")
+		// 读取密码
+		i_password, i_err := term.ReadPassword(fd)
+		if i_err != nil {
+			return user, log.ALL_ERR("Can't read password from command line")
+		}
+		//很简单的密码匹配问题
+		if string(i_password) == password {
+			//Trap到onUser状态
+			//log.Runtime_Log("Login success!")
+			return user, nil
+		}
+		if i == 2 {
+			fmt.Printf("\nWrong password! You are delined\n")
+		} else {
+			fmt.Printf("\nWrong password! Try again\n")
+		}
 
-	//很简单的密码匹配问题
-	if string(i_password) == password {
-		//Trap到onUser状态
-		//log.Runtime_Log("Login success!")
-		return user, nil
 	}
-
-	fmt.Printf("\nWrong password!\n")
 
 	return user, &err.CommandError{
 		Trap: false,
 	}
+
 }
 
 func printHelp() {

@@ -10,6 +10,7 @@ import (
 	"github.com/HowXu/gosql/err"
 	"github.com/HowXu/gosql/log"
 	"github.com/chzyer/readline"
+	"golang.org/x/term"
 )
 
 type Database_user struct {
@@ -134,7 +135,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 				if len(commands) == 2 {
 					if commands[1] == "DATABASES" || commands[1] == "databases" || commands[1] == "Databases" {
 						//打印可访问数据库 首先用户一定存在
-						var results []string
+
 						core.Get_Access("information_schema", "permission")
 						core.Lock("information_schema", "permission")
 						condition := make(map[string]any)
@@ -147,15 +148,19 @@ func onSyntaxInput(user *Database_user, command string) error {
 							})
 						}
 						if len(gets) != 0 && len(gets[0]) != 0 {
-							for _, v := range strings.Split(gets[0][0], ",") {
+							dbs := strings.Split(gets[0][0], ",")
+							var results = make([][]string, len(dbs))
+							var result_index = 0
+							for _, v := range dbs {
 								//自信指针访问
-								results = append(results, strings.Split(v, ".")[0])
+								results[result_index] = append(results[result_index], strings.Split(v, ".")[0])
+								result_index++
 							}
+							//打印
+							print(results, []string{commands[1]})
 						} else {
 							fmt.Printf("No database you can use\n")
 						}
-						//最后答应出来
-						fmt.Printf("strings.Join(results):\n %v\n", strings.Join(results, "\n"))
 					} else if commands[1] == "TABLES" || commands[1] == "tables" || commands[1] == "Tables" {
 						//打印数据库下表
 						var results []string
@@ -182,7 +187,17 @@ func onSyntaxInput(user *Database_user, command string) error {
 									Msg: "Can't show tables",
 								})
 							}
-							fmt.Printf("strings.Join(results):\n%v\n", strings.Join(results, "\n"))
+							//打印表 和打印数据库差不多
+							var results_t = make([][]string, len(results))
+							var result_index_t = 0
+							for _, v := range results {
+								//自信指针访问
+								results_t[result_index_t] = append(results_t[result_index_t], v)
+								result_index_t++
+							}
+							//打印
+							print(results_t, []string{commands[1]})
+							//fmt.Printf("strings.Join(results):\n%v\n", strings.Join(results, "\n"))
 						}
 					} else {
 						fmt.Printf("No such thing to show\n")
@@ -191,15 +206,65 @@ func onSyntaxInput(user *Database_user, command string) error {
 					fmt.Printf("No thing to show\n")
 				}
 			}
+
+		case "passwd", "Passwd", "PASSWD":
+			{
+				//改密码
+				//进入密码输入类型
+				fd := int(os.Stdin.Fd())
+
+				// 使标准输入的文件描述符进入原始模式，这样就不会显示输入的字符
+				oldState, raw_err := term.MakeRaw(fd)
+				if raw_err != nil {
+					return log.ALL_ERR("Can't get the command line")
+				}
+				defer term.Restore(fd, oldState) // 确保在函数返回时恢复终端状态
+
+				fmt.Print("Enter your new password:")
+				// 读取密码
+				i_password, i_err := term.ReadPassword(fd)
+				if i_err != nil {
+					return log.ALL_ERR("Can't read password from command line")
+				}
+				//第二次输入
+				fmt.Print("\nEnter again:")
+				// 读取密码
+				i_password2, i_err2 := term.ReadPassword(fd)
+				if i_err2 != nil {
+					return log.ALL_ERR("Can't read password from command line")
+				}
+
+				//很简单的密码匹配问题
+				if string(i_password) == string(i_password2) {
+					//然后调用Update修改密码
+					condition := make(map[string]any)
+					condition["username"] = user.User
+					data := make(map[string]any)
+					data["password"] = string(i_password2)
+					core.Get_Access("information_schema", "user")
+					core.Lock("information_schema", "user")
+					err_u := core.Update("information_schema", "user", condition, data, false)
+					core.UnLock("information_schema", "user")
+					if err_u != nil {
+						return &err.SyntaxError{
+							Msg: "Password update failed",
+						}
+					}
+					fmt.Printf("\nPassword change success\n")
+				} else {
+					fmt.Printf("\nDifferent passwords during the two input\n")
+				}
+			}
+
 		default:
 			{
 				fmt.Printf("Unknown syntax. Please check your gosql version or typing \"help\" ~\n")
 			}
 		}
 
-		return log.Runtime_log_err(&err.SyntaxError{
+		return &err.SyntaxError{
 			Msg: "Continue Command line",
-		})
+		}
 	}
 
 	return excuteSQL(tree, user)
@@ -225,7 +290,6 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 				//调用Select
 				//判断*的查询情况 这样就需要设置所有的Select选项
 				var all = false
-				var outputs string
 				if len(tree.value) >= 1 && tree.value[0] == "*" {
 
 					//var keys, err_lk = core.GetAllKeys(user.Database, tree.left.value[0])
@@ -268,13 +332,8 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 								Msg: "Can't select from table when sql excute",
 							})
 						}
-						//处理返回的字符为可打印
-						outputs += strings.Join(heads, " ") + "\n"
-
-						for _, ot := range select_re {
-							//自信大胆没有空指针访问
-							outputs += strings.Join(ot, " ") + "\n"
-						}
+						//打印
+						print(select_re, heads)
 					} else {
 						//不存在Where 那就是全部都要
 						var condition = make(map[string]any)
@@ -296,17 +355,10 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 								Msg: "Can't select from table when sql excute",
 							})
 						}
-						//处理返回的字符为可打印
-						outputs += strings.Join(heads, " ") + "\n"
-
-						for _, ot := range select_re {
-							//自信大胆没有空指针访问
-							outputs += strings.Join(ot, " ") + "\n"
-						}
+						//打印
+						print(select_re, heads)
 					}
 				}
-				//看看outputs吧好孩子
-				fmt.Printf("outputs:\n%v\n", outputs)
 
 			} else {
 				return log.Runtime_log_err(&err.PermissionError{
@@ -434,8 +486,8 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 	case INSERT:
 		{
 
-			fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
-			fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
+			//fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
+			//fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 
 			if core.PermissionCheck(user.User, user.Database) {
 				//调用UPDATE
@@ -469,7 +521,79 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 			}
 		}
 	}
-	return log.Runtime_log_err(&err.SyntaxError{
+	return &err.SyntaxError{
 		Msg: "Continue command line",
-	})
+	}
+}
+
+func print(in [][]string, head []string) {
+	fmt.Printf("\nResult below:\n")
+	//要求传入的字符串应该有一定的格式
+	var max_lens []int
+	var len_heads int = len(head)
+	//最长值至少是head的长度
+	for _, h := range head {
+		max_lens = append(max_lens, len(h))
+	}
+	//理论上我们应该获得每种数据的最长一行
+
+	for _, value := range in {
+		//找到每种数据最长一行
+		for i := 0; i < len_heads; i++ {
+			if len(value[i]) > max_lens[i] {
+				max_lens[i] = len(value[i])
+			}
+		}
+	}
+	//接下来构建打印序列
+	var total_len = 1
+	for _, i := range max_lens {
+		total_len += i
+		total_len++
+	}
+	var outputs string
+	//先构建上层
+	for i := 0; i < total_len; i++ {
+		outputs += "-"
+	}
+	//加入头部
+	outputs += "\n|"
+
+	for i := 0; i < len_heads; i++ {
+		//这样可以同时拿到max_lens和v1的数据
+		var fix = max_lens[i] - len(head[i])
+		outputs += head[i]
+		for i := 0; i < fix; i++ {
+			outputs += " "
+		}
+		outputs += "|"
+	}
+
+	outputs += "\n"
+	//下层
+	for i := 0; i < total_len; i++ {
+		outputs += "-"
+	}
+	outputs += "\n"
+	//加入数据
+	for _, v1 := range in {
+		outputs += "|"
+		for i := 0; i < len_heads; i++ {
+			//这样可以同时拿到max_lens和v1的数据
+			var fix = max_lens[i] - len(v1[i])
+			outputs += v1[i]
+			for i := 0; i < fix; i++ {
+				outputs += " "
+			}
+			outputs += "|"
+		}
+		outputs += "\n"
+		for i := 0; i < total_len; i++ {
+			outputs += "-"
+		}
+		outputs += "\n"
+	}
+
+	fmt.Print(outputs)
+
 }

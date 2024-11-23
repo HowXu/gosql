@@ -108,14 +108,28 @@ func ALL_ATA_ERR(info string, extra string) error {
 }
 
 func Runtime_Log(info string) {
-	fmt.Printf("INFO: %s\n\n",info)
+	if debug.LogLevel == 1 {
+		fmt.Printf("INFO: %s\n\n",info)
+	}else{
+		fmt.Printf("%s\n",info)
+	}
+	
 }
 
 func Runtime_Warn(info string) {
-	fmt.Printf("WARNING: %s\n\n",info)
+	if debug.LogLevel == 1 {
+		fmt.Printf("WARNING: %s\n\n",info)
+	}else{
+		fmt.Printf("%s\n",info)
+	}
 }
 
 func Runtime_log_err(e error) error{
-	fmt.Printf("INFO: %s\n\n",e.Error())
+	if debug.LogLevel == 1 {
+		fmt.Printf("INFO: %s\n\n",e.Error())
+	}else{
+		fmt.Printf("%s\n",e.Error())
+	}
+	
 	return e
 }
