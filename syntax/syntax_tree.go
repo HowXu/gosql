@@ -1,7 +1,6 @@
 package syntax
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/HowXu/gosql/err"
@@ -206,7 +205,7 @@ func Create_syntax_tree(line string) (*syntaxNode, error) {
 				}
 
 			}
-			fmt.Printf("columns: %v\n", columns)
+			//fmt.Printf("columns: %v\n", columns)
 			//判断是不是双数
 			if len(columns)%2 != 0 {
 				return head, log.Runtime_log_err(&err.SyntaxError{

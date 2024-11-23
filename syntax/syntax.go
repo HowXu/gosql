@@ -112,6 +112,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 					if commands[1] == "DATABASE" || commands[1] == "database" || commands[1] == "Database" {
 						//创建数据库
 						core.Create_Database(commands[2], user.User)
+						fmt.Print("Done")
 					} else if commands[1] == "TABLE" || commands[1] == "table" || commands[1] == "Table" {
 						//创建表
 						if user.Database == "" {
@@ -124,6 +125,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 							}
 							//使用语法树解析 没错这个就是拿捏指针的自信
 							core.Create_Table_No_Map(user.User, user.Database, tree.value[0], tree.left.value)
+							fmt.Print("Done")
 						}
 					} else {
 						fmt.Printf("No such thing to create\n")

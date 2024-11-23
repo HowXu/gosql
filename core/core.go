@@ -17,7 +17,7 @@ var plainText = "56We55qE5L2O6K+t"
 
 func Init() {
 	bptree.GLOBAL_DEBUG = false
-	debug.LogLevel = 1
+	debug.LogLevel = 0
 	//log目录
 	util.Create_Folder("./log")
 	//log file
