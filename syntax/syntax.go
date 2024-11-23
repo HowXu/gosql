@@ -24,7 +24,7 @@ func OnUser(user *Database_user) error {
 	fmt.Printf("\n\nGosql version %s\n", core.Version)
 	for {
 		//命令提示行
-		fmt.Print("gosql>")
+		//fmt.Print("gosql>")
 		//重复输入
 		//read_command, err := terminal_reader.ReadString('\n')
 		rl, err := readline.New("gosql>")
@@ -112,7 +112,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 					if commands[1] == "DATABASE" || commands[1] == "database" || commands[1] == "Database" {
 						//创建数据库
 						core.Create_Database(commands[2], user.User)
-						fmt.Print("Done")
+						fmt.Println("Done")
 					} else if commands[1] == "TABLE" || commands[1] == "table" || commands[1] == "Table" {
 						//创建表
 						if user.Database == "" {
@@ -125,10 +125,59 @@ func onSyntaxInput(user *Database_user, command string) error {
 							}
 							//使用语法树解析 没错这个就是拿捏指针的自信
 							core.Create_Table_No_Map(user.User, user.Database, tree.value[0], tree.left.value)
-							fmt.Print("Done")
+							fmt.Println("Done")
 						}
 					} else {
 						fmt.Printf("No such thing to create\n")
+					}
+				} else {
+					fmt.Printf("Not a standard create syntax\n")
+				}
+			}
+			//删除数据库
+		case "Drop", "DROP", "drop":
+			{
+				if len(commands) == 3 {
+					if commands[1] == "DATABASE" || commands[1] == "database" || commands[1] == "Database" {
+
+						var cn = make(chan bool)
+						go core.PermissionCheck(user.User, commands[2], cn)
+						if <-cn {
+							//删除文件夹
+							err1 := os.RemoveAll("./db/" + commands[2])
+							if err1 != nil {
+								return log.Runtime_log_err(&err.DatabaseError{Msg: "Delete database failed"})
+							} else {
+								fmt.Println("Done")
+							}
+							if user.Database == commands[2] {
+								user.Database = ""
+							}
+						} else {
+							fmt.Printf("Permission delined\n")
+						}
+
+					} else if commands[1] == "TABLE" || commands[1] == "table" || commands[1] == "Table" {
+						//删除表
+						if user.Database == "" {
+							fmt.Printf("No database was used\n")
+						} else {
+							var cn = make(chan bool)
+							go core.PermissionCheck(user.User, user.Database, cn)
+							if <-cn {
+								//删除文件
+								err1 := os.Remove("./db/" + user.Database + "/" + commands[2] + ".table")
+								if err1 != nil {
+									return log.Runtime_log_err(&err.DatabaseError{Msg: "Delete table failed"})
+								} else {
+									fmt.Println("Done")
+								}
+							} else {
+								fmt.Printf("Permission delined\n")
+							}
+						}
+					} else {
+						fmt.Printf("Wrong drop syntax\n")
 					}
 				} else {
 					fmt.Printf("Not a standard create syntax\n")
@@ -225,14 +274,14 @@ func onSyntaxInput(user *Database_user, command string) error {
 				}
 				defer term.Restore(fd, oldState) // 确保在函数返回时恢复终端状态
 
-				fmt.Print("Enter your new password:")
+				fmt.Println("Enter your new password:")
 				// 读取密码
 				i_password, i_err := term.ReadPassword(fd)
 				if i_err != nil {
 					return log.ALL_ERR("Can't read password from command line")
 				}
 				//第二次输入
-				fmt.Print("\nEnter again:")
+				fmt.Println("\nEnter again:")
 				// 读取密码
 				i_password2, i_err2 := term.ReadPassword(fd)
 				if i_err2 != nil {
@@ -275,7 +324,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 	//另外开一个线程进行sql语句执行
 	var cn = make(chan error)
 	go excuteSQL(tree, user, cn)
-	return <- cn
+	return <-cn
 }
 
 func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
@@ -628,6 +677,6 @@ func print(in [][]string, head []string) {
 		outputs += "\n"
 	}
 
-	fmt.Print(outputs)
+	fmt.Println(outputs)
 
 }
