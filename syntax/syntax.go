@@ -273,7 +273,7 @@ func onSyntaxInput(user *Database_user, command string) error {
 	//另外开一个线程进行sql语句执行
 	var cn = make(chan error)
 	go excuteSQL(tree, user, cn)
-	return <-cn
+	return <- cn
 }
 
 func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
@@ -282,6 +282,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 		cn <- log.Runtime_log_err(&err.SyntaxError{
 			Msg: "No database was used",
 		})
+		return
 	}
 
 	//这一步传入的一定是一个完整的语法树
@@ -341,6 +342,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't select from table when sql excute",
 							})
+							return
 						}
 						//打印
 						print(select_re, heads)
@@ -364,6 +366,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't select from table when sql excute",
 							})
+							return
 						}
 						//打印
 						print(select_re, heads)
@@ -374,6 +377,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
+				return
 			}
 		}
 	case DELETE:
@@ -402,6 +406,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
+							return
 						}
 						fmt.Printf("Done\n")
 					} else {
@@ -417,6 +422,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
+							return
 						}
 						fmt.Printf("Done\n")
 					}
@@ -426,6 +432,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
+				return
 			}
 		}
 	case UPDATE:
@@ -464,8 +471,9 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
-								Msg: "Can't delete from table when sql excute",
+								Msg: "Can't update from table when sql excute",
 							})
+							return
 						}
 						fmt.Printf("Done\n")
 					} else {
@@ -486,8 +494,9 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
-								Msg: "Can't delete from table when sql excute",
+								Msg: "Can't update from table when sql excute",
 							})
+							return
 						}
 						fmt.Printf("Done\n")
 					}
@@ -497,6 +506,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
+				return
 			}
 		}
 	case INSERT:
@@ -517,6 +527,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 						cn <- log.Runtime_log_err(&err.DatabaseError{
 							Msg: "Unbelievable where existing o.O",
 						})
+						return
 					} else {
 
 						//condition["password"] = "kali"
@@ -526,8 +537,9 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
 							cn <- log.Runtime_log_err(&err.DatabaseError{
-								Msg: "Can't delete from table when sql excute",
+								Msg: "Can't insert from table when sql excute",
 							})
+							return
 						}
 						fmt.Printf("Done\n")
 					}
@@ -537,6 +549,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
+				return
 			}
 		}
 	}

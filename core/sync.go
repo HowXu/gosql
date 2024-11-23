@@ -28,7 +28,13 @@ func Lock(database string, table string) error {
 		if err_rd != io.EOF && err_rd != nil {
 			return log.ALL_ERR("Can't read next line when lock table")
 		}
-		tables = append(tables, string(a_table))
+		var cn = make(chan string)
+		go DecryptAES(string(a_table), plainText, cn)
+		var o_cn = <-cn
+		if o_cn == "" {
+			return log.ALL_ERR("Decode failed")
+		}
+		tables = append(tables, o_cn)
 	}
 	//遍历表文件是否存在该元素
 	var exist bool = false
@@ -53,7 +59,14 @@ func Lock(database string, table string) error {
 		//if err_sk != nil {
 		//	return log.ALL_ERR("Can't seek to end in lock file")
 		//}
-		LockFilWriter.WriteString(database + "." + table + "\n")
+		var cn = make(chan string)
+		go EncryptAES(database+"."+table, plainText, cn)
+		var o_cn = <-cn
+		if o_cn == "" {
+			return log.ALL_ERR("Encode failed")
+		}
+
+		LockFilWriter.WriteString(o_cn + "\n")
 	}
 
 	LockFilWriter.Flush()
@@ -74,7 +87,13 @@ func UnLock(database string, table string) error {
 		if err_rd != io.EOF && err_rd != nil {
 			return log.ALL_ERR("Can't read next line when unlock table")
 		}
-		tables = append(tables, string(a_table))
+		var cn = make(chan string)
+		go DecryptAES(string(a_table), plainText, cn)
+		var o_cn = <-cn
+		if o_cn == "" {
+			return log.ALL_ERR("Decode failed")
+		}
+		tables = append(tables, o_cn)
 	}
 	//遍历表文件是否存在该元素
 	var location int = -1
@@ -99,7 +118,13 @@ func UnLock(database string, table string) error {
 		//通过直接跳来减少内存使用
 		for idx, tab := range tables {
 			if idx != location {
-				LockFilWriter.WriteString(tab)
+				var cn = make(chan string)
+				go EncryptAES(tab, plainText, cn)
+				var o_cn = <-cn
+				if o_cn == "" {
+					return log.ALL_ERR("Encode failed")
+				}
+				LockFilWriter.WriteString(o_cn)
 			}
 		}
 		//清空源文件
@@ -129,7 +154,14 @@ func GetLockStat(database string, table string) bool {
 			log.ALL_ERR("Can't read next line when get lock stat")
 			return false
 		}
-		tables = append(tables, string(a_table))
+		var cn = make(chan string)
+		go DecryptAES(string(a_table), plainText, cn)
+		var o_cn = <-cn
+		if o_cn == "" {
+			log.ALL_ERR("Decode failed")
+			return false
+		}
+		tables = append(tables, o_cn)
 	}
 
 	//遍历表文件是否存在该元素

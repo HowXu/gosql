@@ -35,3 +35,11 @@ type PermissionError struct {
 func (e *PermissionError) Error() string {
 	return "permission error: " + e.Msg
 }
+
+type CryptError struct {
+	Msg string
+}
+
+func (e *CryptError) Error() string {
+	return "crypt error: " + e.Msg
+}

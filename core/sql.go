@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 
@@ -68,7 +69,15 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 	}
 
 	//types_parsed = strings.Split(string(types), "|")
-	data_parsed = strings.Split(string(data), "|")
+	//解密部分
+	var cn = make(chan string)
+	go DecryptAES(string(data), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return trees, data_parsed, log.ALL_ERR("Decode failed")
+	}
+
+	data_parsed = strings.Split(o_cn, "|")
 	//解析头 为每个头创建树
 
 	for i := 0; i < len(data_parsed); i++ {
@@ -81,6 +90,7 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 	for {
 		//读取下一行
 		var data_line, _, err_tr = table_reader.ReadLine()
+
 		if err_tr != nil {
 			if err_tr == io.EOF {
 				log.STDLOG("Read table finish", table)
@@ -88,7 +98,14 @@ func paser_low(database string, table string) (map[string]*bptree.Tree, []string
 			}
 		}
 
-		var data_parsed_line []string = strings.Split(string(data_line), "|")
+		var cn = make(chan string)
+		go DecryptAES(string(data_line), plainText, cn)
+		var o_cn = <-cn
+		if o_cn == "" {
+			return trees, data_parsed, log.ALL_ERR("Decode failed")
+		}
+
+		var data_parsed_line []string = strings.Split(o_cn, "|")
 		//fmt.Printf("len(trees): %v\n", len(trees))
 		//fmt.Printf("len(data_parsed_line): %v\n", len(data_parsed_line))
 		//fmt.Printf("len(data_parsed): %v\n", len(data_parsed))
@@ -130,19 +147,34 @@ func match(database string, table string, condition map[string]any, usage string
 	defer table_file.Close()
 
 	var reader = bufio.NewReader(table_file)
-	//空读取第一行
+	//读取第一行
 	var keys, _, err_key = reader.ReadLine()
 	if err_key != nil {
 		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Read data type failed", usage)
 	}
-	keys_parsed = strings.Split(string(keys), "|")
+
+	var cn = make(chan string)
+	go DecryptAES(string(keys), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Decode data failed", usage)
+	}
+
+	keys_parsed = strings.Split(o_cn, "|")
 	//读取第二行获取数据类型
 	//这里支持的有string int float boolean string[]
 	var types, _, err_rd = reader.ReadLine()
 	if err_rd != nil {
 		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Read data type failed", usage)
 	}
-	types_parsed = strings.Split(string(types), "|")
+
+	var cn2 = make(chan string)
+	go DecryptAES(string(types), plainText, cn2)
+	var o_cn2 = <- cn2
+	if o_cn2 == "" {
+		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Decode data failed", usage)
+	}
+	types_parsed = strings.Split(o_cn2, "|")
 
 	if len(keys_parsed) == 0 || len(types_parsed) == 0 {
 		return table_path, end_target, keys_parsed, types_parsed, tree, log.ALL_ATA_ERR("Zero kyes or types", usage)
@@ -418,7 +450,15 @@ func Insert(database string, table string, data []string) error {
 	if err_rd != nil {
 		return log.ALL_ERR("Read data type failed")
 	}
-	var types_parsed = strings.Split(string(types), "|")
+
+	var cn3 = make(chan string)
+	go DecryptAES(string(types), plainText, cn3)
+	var o_cn3 = <-cn3
+	if o_cn3 == "" {
+		return log.ALL_ERR("Decode data failed")
+	}
+
+	var types_parsed = strings.Split(o_cn3, "|")
 	//现在构造新的字符串插入到文件末尾
 	var input []string
 	var index int = 0
@@ -477,7 +517,13 @@ func Insert(database string, table string, data []string) error {
 	}
 	defer w_table_file.Close()
 	var writer = bufio.NewWriter(w_table_file)
-	writer.WriteString(strings.Join(input, "|") + "\n")
+	var cn = make(chan string)
+	go EncryptAES(strings.Join(input, "|"), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	writer.WriteString(o_cn + "\n")
 	return writer.Flush()
 }
 
@@ -515,9 +561,21 @@ func Update(database string, table string, condition map[string]any, data map[st
 	//用缓冲区我只能说性能更下一层楼
 	var writer = bufio.NewWriter(file)
 	//先把头和数据类型读进去
-	writer.WriteString(strings.Join(keys_parsed, "|") + "\n")
+	var cn = make(chan string)
+	go EncryptAES(strings.Join(keys_parsed, "|"), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	writer.WriteString(o_cn + "\n")
 	//fmt.Printf("keys_parsed: %v\n", keys_parsed)
-	writer.WriteString(strings.Join(types_parsed, "|") + "\n")
+	var cn2 = make(chan string)
+	go EncryptAES(strings.Join(types_parsed, "|"), plainText, cn2)
+	var o_cn2 = <-cn2
+	if o_cn2 == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	writer.WriteString(o_cn2 + "\n")
 	var line_index int = 0
 	for _, index := range end_target {
 		var result []string
@@ -604,7 +662,13 @@ func Update(database string, table string, condition map[string]any, data map[st
 			//推进ReadLine函数
 			if line_index == index {
 				//对应行 则写入不同数据
-				writer.WriteString(strings.Join(result, "|") + "\n")
+				var cn = make(chan string)
+				go EncryptAES(strings.Join(result, "|"), plainText, cn)
+				var o_cn = <-cn
+				if o_cn == "" {
+					return log.ALL_ERR("Encode failed")
+				}
+				writer.WriteString(o_cn + "\n")
 				//补上空读一行
 				reader.ReadLine()
 				line_index++
@@ -672,8 +736,21 @@ func Delete(database string, table string, condition map[string]any, is_arc bool
 	//用缓冲区我只能说性能更下一层楼
 	var writer = bufio.NewWriter(file)
 	//先把头和数据类型读进去
-	writer.WriteString(strings.Join(keys_parsed, "|") + "\n")
-	writer.WriteString(strings.Join(types_parsed, "|") + "\n")
+	var cn = make(chan string)
+	go EncryptAES(strings.Join(keys_parsed, "|"), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	writer.WriteString(o_cn + "\n")
+	//fmt.Printf("keys_parsed: %v\n", keys_parsed)
+	var cn2 = make(chan string)
+	go EncryptAES(strings.Join(types_parsed, "|"), plainText, cn2)
+	var o_cn2 = <-cn2
+	if o_cn2 == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	writer.WriteString(o_cn2 + "\n")
 
 	var line_index int = 0
 	for _, index := range end_target {
@@ -782,8 +859,7 @@ func Create_Database(database string, user string) error {
 		if se_err_r != nil {
 			return log.Runtime_log_err(&err.DatabaseError{Msg: "Can't select from permission when create database"})
 		}
-		var getss_r []string
-		getss_r = (strings.Split(gets_r[0][0], ","))
+		var getss_r = (strings.Split(gets_r[0][0], ","))
 		var data_r = make(map[string]any)
 		data_r["permits"] = strings.Join(append(getss_r, database+".*"), ",")
 		Get_Access("information_schema", "permission")
@@ -880,7 +956,7 @@ func Create_Table_No_Map(user string, database string, table string, head []stri
 	}
 
 	var cn = make(chan bool)
-	go PermissionCheck(user, database,cn)
+	go PermissionCheck(user, database, cn)
 	//true说明允许创建表
 	if !<-cn {
 		return &err.DatabaseError{Msg: "Permission delined when create table"}
@@ -893,7 +969,8 @@ func Create_Table_No_Map(user string, database string, table string, head []stri
 // 请确保调用该函数时head长度为2的倍数
 func create_table_User_No_Map(database string, table string, head []string) error {
 	//传入应该有表头
-	var table_path = fmt.Sprintf("./db/%s/%s.table", database, table)
+
+	var table_path = path.Join("db", database, table+".table") //fmt.Sprintf("./db/%s/%s.table", database, table)
 	if len(head) == 0 {
 		return log.ALL_ERR("Empty table head")
 	}
@@ -925,11 +1002,25 @@ func create_table_User_No_Map(database string, table string, head []string) erro
 		types = append(types, head[i+1])
 	}
 
-	fmt.Printf("heads: %v\n", heads)
-	fmt.Printf("types: %v\n", types)
+	//fmt.Printf("heads: %v\n", heads)
+	//fmt.Printf("types: %v\n", types)
+	//先把头和数据类型读进去
+	var cn = make(chan string)
+	go EncryptAES(strings.Join(heads, "|"), plainText, cn)
+	var o_cn = <- cn
+	if o_cn == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	//fmt.Printf("keys_parsed: %v\n", keys_parsed)
+	var cn2 = make(chan string)
+	go EncryptAES(strings.Join(types, "|"), plainText, cn2)
+	var o_cn2 = <-cn2
+	if o_cn2 == "" {
+		return log.ALL_ERR("Encode failed")
+	}
 
-	var heads_output = strings.Join(heads, "|") + "\n"
-	var types_output = strings.Join(types, "|") + "\n"
+	var heads_output = o_cn + "\n"
+	var types_output = o_cn2 + "\n"
 	//写入文件
 	var _, err_r = writer.WriteString(heads_output)
 	if err_r != nil {
@@ -953,7 +1044,7 @@ func Create_Table(user string, database string, table string, head map[string]st
 	}
 
 	var cn = make(chan bool)
-	go PermissionCheck(user, database,cn)
+	go PermissionCheck(user, database, cn)
 	//true说明允许创建表
 	if !<-cn {
 		return &err.DatabaseError{Msg: "Permission delined when create table"}
@@ -996,11 +1087,24 @@ func create_table_User(database string, table string, head map[string]string) er
 		types = append(types, value)
 	}
 
-	fmt.Printf("heads: %v\n", heads)
-	fmt.Printf("types: %v\n", types)
+	//fmt.Printf("heads: %v\n", heads)
+	//fmt.Printf("types: %v\n", types)
+	var cn = make(chan string)
+	go EncryptAES(strings.Join(heads, "|"), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return log.ALL_ERR("Encode failed")
+	}
+	//fmt.Printf("keys_parsed: %v\n", keys_parsed)
+	var cn2 = make(chan string)
+	go EncryptAES(strings.Join(types, "|"), plainText, cn2)
+	var o_cn2 = <-cn2
+	if o_cn2 == "" {
+		return log.ALL_ERR("Encode failed")
+	}
 
-	var heads_output = strings.Join(heads, "|") + "\n"
-	var types_output = strings.Join(types, "|") + "\n"
+	var heads_output = o_cn + "\n"
+	var types_output = o_cn2 + "\n"
 	//写入文件
 	var _, err_r = writer.WriteString(heads_output)
 	if err_r != nil {
@@ -1043,8 +1147,14 @@ func GetAllTypes(database string, table string) ([]string, error) {
 	if err_rd != nil {
 		return types_parsed, log.ALL_ERR("Read data type failed")
 	}
+	var cn = make(chan string)
+	go DecryptAES(string(types), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return types_parsed, log.ALL_ERR("Encode failed")
+	}
 
-	types_parsed = strings.Split(string(types), "|")
+	types_parsed = strings.Split(o_cn, "|")
 	return types_parsed, nil
 }
 
@@ -1070,11 +1180,18 @@ func GetAllKeys(database string, table string) ([]string, error) {
 
 	var reader = bufio.NewReader(table_file)
 
-	var types, _, err_rd = reader.ReadLine()
+	var keys, _, err_rd = reader.ReadLine()
 	if err_rd != nil {
 		return keys_parsed, log.ALL_ERR("Read keys failed")
 	}
 
-	keys_parsed = strings.Split(string(types), "|")
+	var cn = make(chan string)
+	go DecryptAES(string(keys), plainText, cn)
+	var o_cn = <-cn
+	if o_cn == "" {
+		return keys_parsed, log.ALL_ERR("Encode failed")
+	}
+
+	keys_parsed = strings.Split(o_cn, "|")
 	return keys_parsed, nil
 }

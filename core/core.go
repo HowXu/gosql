@@ -12,11 +12,12 @@ import (
 	"github.com/HowXu/gosql/util"
 )
 
-var Version string = "1.0-gamma"
+var Version string = "1.1"
+var plainText = "56We55qE5L2O6K+t"
 
 func Init() {
 	bptree.GLOBAL_DEBUG = false
-	debug.LogLevel = 0
+	debug.LogLevel = 1
 	//log目录
 	util.Create_Folder("./log")
 	//log file
@@ -41,10 +42,11 @@ func Init() {
 	LockFilWriter = bufio.NewWriter(lockfile)
 
 	//最基本的user表,权限表
-	//新建数据库
-	Create_Database("information_schema","root")
+	//新建数据库 注意这里是有问题的 没有两个表文件是不可能创建数据库的
+	util.Create_Folder("./db/information_schema")
+	//Create_Database("information_schema","root")
+	//只能使用原始IO
 	//新建表
-
 	Create_Table_No_Map("root","information_schema", "user",[]string{"username","string","password","string"})
 	Create_Table_No_Map("root","information_schema", "permission", []string{"user","string","permits","string[]"})
 	//Insert之前进行读取判断防止重复
