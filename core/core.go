@@ -12,7 +12,7 @@ import (
 	"github.com/HowXu/gosql/util"
 )
 
-var Version string = "1.1"
+var Version string = "1.2"
 var plainText = "56We55qE5L2O6K+t"
 
 func Init() {

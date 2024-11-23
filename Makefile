@@ -1,6 +1,6 @@
 .PHONY: all build run
 .DEFAULT_GOAL := run
-
+export MAKEFLAGS := -s
 all: build run
 
 build:
