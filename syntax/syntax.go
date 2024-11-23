@@ -87,7 +87,10 @@ func onSyntaxInput(user *Database_user, command string) error {
 					//查询一下有没有这个数据库
 					if core.CheckDatabase(commands[2]) {
 						//权限判断
-						if core.PermissionCheck(user.User, commands[2]) {
+						var cn2 = make(chan bool)
+						go core.PermissionCheck(user.User, commands[2], cn2)
+						//true说明允许创建表
+						if <-cn2 {
 							user.Database = commands[2]
 							fmt.Printf("switch to %s\n", commands[2])
 						} else {
@@ -267,13 +270,16 @@ func onSyntaxInput(user *Database_user, command string) error {
 		}
 	}
 
-	return excuteSQL(tree, user)
-
+	//另外开一个线程进行sql语句执行
+	var cn = make(chan error)
+	go excuteSQL(tree, user, cn)
+	return <-cn
 }
 
-func excuteSQL(tree *syntaxNode, user *Database_user) error {
+func excuteSQL(tree *syntaxNode, user *Database_user, cn chan error) {
 	if user.Database == "" {
-		return log.Runtime_log_err(&err.SyntaxError{
+
+		cn <- log.Runtime_log_err(&err.SyntaxError{
 			Msg: "No database was used",
 		})
 	}
@@ -284,7 +290,11 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 		{
 			//权限判断
 			//从树里拿表和数据库我就不说了
-			if core.PermissionCheck(user.User, user.Database) {
+			var cn1 = make(chan bool)
+			go core.PermissionCheck(user.User, user.Database, cn1)
+			//true说明允许创建表
+			if <-cn1 {
+
 				//fmt.Printf("%s\n", strings.Join(tree.value, " "))
 				//fmt.Printf("%s\n", strings.Join(tree.left.value, " "))
 				//调用Select
@@ -328,7 +338,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						//var select_re, err_sel = core.Select("information_schema", "user", tree.value, condition, false)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't select from table when sql excute",
 							})
 						}
@@ -351,7 +361,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						//var select_re, err_sel = core.Select("information_schema", "user", tree.value, condition, false)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't select from table when sql excute",
 							})
 						}
@@ -361,14 +371,17 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 				}
 
 			} else {
-				return log.Runtime_log_err(&err.PermissionError{
+				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
 			}
 		}
 	case DELETE:
 		{
-			if core.PermissionCheck(user.User, user.Database) {
+			var cn1 = make(chan bool)
+			go core.PermissionCheck(user.User, user.Database, cn1)
+			//true说明允许创建表
+			if <-cn1 {
 				//调用Delete
 				for _, tb := range tree.left.value {
 
@@ -386,7 +399,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						var err_sel = core.Delete(user.Database, tb, condition, tree.right.or)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
 						}
@@ -401,7 +414,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						var err_sel = core.Delete(user.Database, tb, condition, false)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
 						}
@@ -410,7 +423,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 				}
 
 			} else {
-				return log.Runtime_log_err(&err.PermissionError{
+				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
 			}
@@ -420,7 +433,10 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 			//fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
 			//fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 
-			if core.PermissionCheck(user.User, user.Database) {
+			var cn1 = make(chan bool)
+			go core.PermissionCheck(user.User, user.Database, cn1)
+			//true说明允许创建表
+			if <-cn1 {
 				//调用UPDATE
 				for _, tb := range tree.value {
 
@@ -447,7 +463,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						var err_sel = core.Update(user.Database, tb, condition, data, tree.right.or)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
 						}
@@ -469,7 +485,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						var err_sel = core.Update(user.Database, tb, condition, data, false)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
 						}
@@ -478,7 +494,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 				}
 
 			} else {
-				return log.Runtime_log_err(&err.PermissionError{
+				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
 			}
@@ -489,13 +505,16 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 			//fmt.Printf("|%s|\n", strings.Join(tree.value, "|"))
 			//fmt.Printf("|%s|\n", strings.Join(tree.left.value, "|"))
 
-			if core.PermissionCheck(user.User, user.Database) {
+			var cn1 = make(chan bool)
+			go core.PermissionCheck(user.User, user.Database, cn1)
+			//true说明允许创建表
+			if <-cn1 {
 				//调用UPDATE
 				for _, tb := range tree.value {
 					//这个不可能有where条件 如果出现了where就是错的
 					if tree.right != nil {
 						//存在where条件时
-						return log.Runtime_log_err(&err.DatabaseError{
+						cn <- log.Runtime_log_err(&err.DatabaseError{
 							Msg: "Unbelievable where existing o.O",
 						})
 					} else {
@@ -506,7 +525,7 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 						var err_sel = core.Insert(user.Database, tb, tree.left.value)
 						core.UnLock(user.Database, tb)
 						if err_sel != nil {
-							return log.Runtime_log_err(&err.DatabaseError{
+							cn <- log.Runtime_log_err(&err.DatabaseError{
 								Msg: "Can't delete from table when sql excute",
 							})
 						}
@@ -515,13 +534,13 @@ func excuteSQL(tree *syntaxNode, user *Database_user) error {
 				}
 
 			} else {
-				return log.Runtime_log_err(&err.PermissionError{
+				cn <- log.Runtime_log_err(&err.PermissionError{
 					Msg: "Permission delined",
 				})
 			}
 		}
 	}
-	return &err.SyntaxError{
+	cn <- &err.SyntaxError{
 		Msg: "Continue command line",
 	}
 }

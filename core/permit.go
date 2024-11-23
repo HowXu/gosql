@@ -11,7 +11,7 @@ import (
 )
 
 // 判断是否有权限进行操作
-func PermissionCheck(user string, database string) bool {
+func PermissionCheck(user string, database string,cn chan bool) {
 	//首先读取permission表
 	Get_Access("information_schema", "permission")
 	Lock("information_schema", "permission")
@@ -23,7 +23,7 @@ func PermissionCheck(user string, database string) bool {
 		log.Runtime_log_err(&err.PermissionError{
 			Msg: "Can't select databases from permission table",
 		})
-		return false
+		cn <- false
 	}
 	//简单的遍历判断
 	if len(gets) < 1 || len(gets[0]) < 1 {
@@ -31,7 +31,7 @@ func PermissionCheck(user string, database string) bool {
 			//这怎么可能? 没有这个用户不可能登录 防止内存Hook
 			Msg: "No such user or no any permission in permission table",
 		})
-		return false
+		cn <- false
 	}
 	//接下来判断有没有数据库的访问权限
 	rt := false
@@ -45,7 +45,7 @@ func PermissionCheck(user string, database string) bool {
 		}
 	}
 
-	return rt
+	cn <- rt
 }
 
 // 查询数据库是否存在

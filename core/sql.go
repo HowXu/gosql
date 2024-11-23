@@ -879,8 +879,10 @@ func Create_Table_No_Map(user string, database string, table string, head []stri
 		return create_table_User_No_Map(database, table, head)
 	}
 
+	var cn = make(chan bool)
+	go PermissionCheck(user, database,cn)
 	//true说明允许创建表
-	if !PermissionCheck(user, database) {
+	if !<-cn {
 		return &err.DatabaseError{Msg: "Permission delined when create table"}
 	}
 
@@ -950,8 +952,10 @@ func Create_Table(user string, database string, table string, head map[string]st
 		return create_table_User(database, table, head)
 	}
 
+	var cn = make(chan bool)
+	go PermissionCheck(user, database,cn)
 	//true说明允许创建表
-	if !PermissionCheck(user, database) {
+	if !<-cn {
 		return &err.DatabaseError{Msg: "Permission delined when create table"}
 	}
 
