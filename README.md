@@ -132,7 +132,7 @@ exit
 
 > [!NOTE]\
 > Go 1.23.3  
-> Windows 11 24H2
+> Windows 11 24H2  
 > Mingw make 4.4.1
 
 ## 构建
